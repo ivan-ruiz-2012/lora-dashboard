@@ -1,0 +1,112 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard LoRa - Histórico + Alarmas</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { background: #111; color: #fff; font-family: Arial, sans-serif; margin: 20px; }
+    .card-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+    .card {
+      background: #222;
+      border: 2px solid #333;
+      border-radius: 10px;
+      padding: 15px;
+      width: 180px;
+      text-align: center;
+      font-size: 1.2rem;
+      transition: background 0.3s;
+    }
+    .danger { background: #b80000; }
+    .warning { background: #cc6600; }
+    canvas { background: #222; padding: 20px; border-radius: 12px; }
+  </style>
+</head>
+<body>
+  <h1 style="text-align:center;">📈 Dashboard SCADA LoRa</h1>
+  <div class="card-grid">
+    <div class="card" id="temp">🌡️ Temp: -- °C</div>
+    <div class="card" id="hum">💧 Humedad: -- %</div>
+    <div class="card" id="flow">🚰 Flujo: -- L/min</div>
+    <div class="card" id="volt">🔋 Voltaje: -- V</div>
+    <div class="card" id="wind">💨 Viento: -- km/h</div>
+  </div>
+
+  <h2 style="text-align:center;">🕓 Historial (últimos 60 datos)</h2>
+  <canvas id="historyChart" width="1000" height="400"></canvas>
+
+  <script>
+    const channelID = "3002997";
+    const readAPI = "4YNKSM88V7TMKB68";
+    const fields = [1, 2, 3, 4, 5];
+    const chartLabels = [];
+    const chartData = [[], [], [], [], []];
+
+    async function fetchLast60() {
+      const res = await fetch(`https://api.thingspeak.com/channels/${channelID}/feeds.json?api_key=${readAPI}&results=60`);
+      const data = await res.json();
+      const feeds = data.feeds;
+
+      feeds.forEach(feed => {
+        chartLabels.push(feed.created_at.split("T")[1].substring(0, 5));
+        chartData[0].push(parseFloat(feed.field1));
+        chartData[1].push(parseFloat(feed.field2));
+        chartData[2].push(parseFloat(feed.field3));
+        chartData[3].push(parseFloat(feed.field4));
+        chartData[4].push(parseFloat(feed.field5));
+      });
+
+      updateCards(feeds[feeds.length - 1]);
+      drawChart();
+    }
+
+    function updateCards(latest) {
+      const f1 = parseFloat(latest.field1);
+      const f2 = parseFloat(latest.field2);
+      const f3 = parseFloat(latest.field3);
+      const f4 = parseFloat(latest.field4);
+      const f5 = parseFloat(latest.field5);
+
+      const card = (id, val, unit, check) => {
+        const el = document.getElementById(id);
+        el.innerHTML = `${el.innerText.split(':')[0]}: ${val} ${unit}`;
+        el.className = "card";
+        if (check(val)) el.classList.add(id === "volt" ? "warning" : "danger");
+      };
+
+      card("temp", f1.toFixed(1), "°C", v => v > 30);
+      card("hum", f2.toFixed(1), "%", _ => false);
+      card("flow", f3.toFixed(1), "L/min", v => v < 1.0);
+      card("volt", f4.toFixed(2), "V", v => v < 3.0);
+      card("wind", f5.toFixed(1), "km/h", _ => false);
+    }
+
+    function drawChart() {
+      const ctx = document.getElementById("historyChart").getContext("2d");
+      new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: chartLabels,
+          datasets: [
+            { label: "Temp (°C)", data: chartData[0], borderColor: "#ff4444", fill: false },
+            { label: "Humedad (%)", data: chartData[1], borderColor: "#44c4ff", fill: false },
+            { label: "Flujo (L/min)", data: chartData[2], borderColor: "#ffff44", fill: false },
+            { label: "Voltaje (V)", data: chartData[3], borderColor: "#ff9900", fill: false },
+            { label: "Viento (km/h)", data: chartData[4], borderColor: "#bbb", fill: false }
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: { display: true, title: { display: true, text: "Hora" }},
+            y: { display: true, title: { display: true, text: "Valor" }}
+          }
+        }
+      });
+    }
+
+    fetchLast60();
+  </script>
+</body>
+</html>
