@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Control LED vía ThingSpeak</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #222;
+      color: white;
+      text-align: center;
+      padding-top: 60px;
+    }
+    button {
+      font-size: 20px;
+      padding: 12px 30px;
+      margin: 15px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .on  { background-color: #4CAF50; color: white; }
+    .off { background-color: #f44336; color: white; }
+    #notificacion {
+      margin-top: 30px;
+      font-size: 18px;
+      font-weight: bold;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+  </style>
+</head>
+<body>
+  <h1>Control de LED por LoRa + ThingSpeak</h1>
+  <button class="on" onclick="enviarComando('1')">Encender LED</button>
+  <button class="off" onclick="enviarComando('0')">Apagar LED</button>
+
+  <div id="notificacion"></div>
+
+  <script>
+    const API_KEY = 'C8XHPGY6TZVIBNVF'; // Tu API KEY de escritura de ThingSpeak
+
+    function enviarComando(valor) {
+      const url = `https://api.thingspeak.com/update?api_key=${API_KEY}&field8=${valor}&status=${Date.now()}`;
+      fetch(url)
+        .then(res => res.text())
+        .then(id => {
+          if (parseInt(id) > 0) {
+            mostrarNotificacion("✅ Comando enviado: " + valor);
+          } else {
+            mostrarNotificacion("❌ Error al enviar comando");
+          }
+        })
+        .catch(err => mostrarNotificacion("❌ Error de red: " + err));
+    }
+
+    function mostrarNotificacion(texto) {
+      const noti = document.getElementById("notificacion");
+      noti.innerText = texto;
+      noti.style.opacity = "1";
+      setTimeout(() => {
+        noti.style.opacity = "0";
+      }, 3000);
+    }
+  </script>
+</body>
+</html>
