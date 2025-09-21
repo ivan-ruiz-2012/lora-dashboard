@@ -1,0 +1,2684 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard Pivet – Protegido</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Leaflet (mapa) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    /* ----- SPLASH SCREEN ----- */
+    #splash {
+      position: fixed; inset: 0;
+      background: url('https://i.ibb.co/fgXzxxM/VID-007-3.jpg') no-repeat center center fixed;
+      background-size: cover;
+      display: flex; justify-content: center; align-items: center;
+      z-index: 99999;
+    }
+    #splash .splash-content {
+      text-align: center; color: white; background: rgba(0,0,0,.6);
+      padding: 40px; border-radius: 15px; box-shadow: 0 4px 8px rgba(0,0,0,.3);
+      animation: fadeIn 2s ease-in-out;
+    }
+    #splash h1 { font-size: 3.5em; margin-bottom: 20px; text-shadow: 2px 2px 4px rgba(0,0,0,.5); }
+    #splash p { font-size: 1.6em; margin-bottom: 30px; }
+    #splash button {
+      padding: 12px 30px; font-size: 1.3em; background: #28a745; color: #fff;
+      border: none; border-radius: 8px; cursor: pointer; transition: background-color .3s ease;
+    }
+    #splash button:hover { background: #218838; }
+    @keyframes fadeIn { 0%{opacity:0;transform:scale(.9)} 100%{opacity:1;transform:scale(1)} }
+
+    /* ----- ESTILOS DEL DASHBOARD ----- */
+    :root {
+      --fondo-claro: #f4f4f4; --texto-claro: #333;
+      --fondo-oscuro: #1e1e1e; --texto-oscuro: #eee;
+      --card-claro: #fff; --card-oscuro: #2c2c2c;
+    }
+    body {
+      font-family: Arial, sans-serif; margin: 0; padding: 0;
+      background-color: var(--fondo-claro); color: var(--texto-claro);
+      transition: background .3s, color .3s;
+    }
+    body.dark-mode { background-color: var(--fondo-oscuro); color: var(--texto-oscuro); }
+
+    header {
+      background: #222; color: #fff; padding: 1rem; text-align: center; position: relative;
+    }
+    #toggleTheme {
+      position: absolute; top: 10px; right: 10px; background: #444; color: white; border: none;
+      padding: 5px 10px; border-radius: 5px; cursor: pointer;
+    }
+
+    .config { padding: 1rem; background: #fff0e0; text-align: center; }
+    body.dark-mode .config { background: #3b2f2f; }
+
+    .umbral-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 1rem; margin-top: 1rem; }
+    .umbral-row label { display: flex; align-items: center; gap: .3rem; font-weight: 500; }
+    .umbral-row input { width: 70px; padding: 5px; text-align: right; }
+
+    .cards { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; padding: 1rem; }
+    .card {
+      background: var(--card-claro); padding: 1rem; border-radius: 10px; min-width: 180px; text-align: center;
+      box-shadow: 0 0 10px rgba(0,0,0,.1); transition: background .3s, color .3s;
+    }
+    body.dark-mode .card { background: var(--card-oscuro); box-shadow: 0 0 10px rgba(255,255,255,.05); }
+
+    .critical { background-color: #ffdddd; border: 2px solid red; }
+    body.dark-mode .critical { background-color: #733; }
+
+    canvas { max-width: 100%; }
+
+    #lastUpdate, #lastWhatsApp, #loginStatus { text-align: center; margin: 1rem; font-weight: bold; }
+
+    #refreshBtn, #testBtn, #logoutBtn, #wakeBtn {
+      display: inline-block; margin: .5rem .5rem; padding: .5rem 1rem; font-size: 1rem; color: white;
+      border: none; border-radius: 5px; cursor: pointer;
+    }
+    #testBtn { background: #4CAF50; } #testBtn:hover { background: #3e8e41; }
+    #logoutBtn { background: #c0392b; } #logoutBtn:hover { background: #992d22; }
+    #wakeBtn { background: #7f8c8d; } #wakeBtn:hover { background: #667273; }
+
+    .notif {
+      position: fixed; bottom: 20px; right: 20px; background: #4caf50; color: white;
+      padding: 10px 20px; border-radius: 8px; font-weight: bold; z-index: 9999;
+      box-shadow: 0 2px 8px rgba(0,0,0,.3); opacity: 0; transform: translateY(20px); transition: all .4s;
+    }
+    .notif.show { opacity: 1; transform: translateY(0); }
+
+    /* ----- MAPA ----- */
+    .map-card {
+      background: var(--card-claro); margin: 16px; padding: 12px; border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0,0,0,.1);
+    }
+    body.dark-mode .map-card { background: var(--card-oscuro); box-shadow: 0 0 10px rgba(255,255,255,.05); }
+    #map { width: 100%; height: 320px; border-radius: 10px; }
+    #mapStatus { text-align: center; margin-top: 8px; font-weight: 600; }
+
+    /* Línea de estado/controles extra */
+    .toolbar {
+      display:flex; flex-wrap:wrap; gap:.75rem; justify-content:center; align-items:center; margin:.5rem auto 0;
+    }
+    .toolbar label { display:flex; align-items:center; gap:.4rem; background:#fff; border-radius:8px; padding:.35rem .6rem; }
+    body.dark-mode .toolbar label { background:#2c2c2c; }
+  
+@keyframes blinkBorder {
+  0%   { box-shadow: 0 0 10px 2px red; }
+  50%  { box-shadow: 0 0 0 0 red; }
+  100% { box-shadow: 0 0 10px 2px red; }
+}
+.card.alerta, .card.critical { border: 2px solid red !important; animation: blinkBorder 1s infinite; }
+
+.config #alertInterval {
+  width: 60px !important;
+  height: 28px !important;
+  font-size: 14px;
+  padding: 2px 6px;
+  text-align: center;
+  border-radius: 6px;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+
+
+/* ===== Ajuste Login Form limpio y centrado ===== */
+#loginForm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 0 auto;
+  max-width: 260px;
+}
+
+#loginForm label {
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#loginForm input[type="text"],
+#loginForm input[type="password"] {
+  width: 220px;
+  height: 28px;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+}
+
+#loginForm button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  background: #2e7d32;
+  color: #fff;
+  font-weight: bold;
+  cursor: pointer;
+}
+#loginForm button:hover {
+  background: #256b2a;
+}
+
+</style>
+
+  <!-- 🔌 Pump Control Styles (scoped) -->
+  <style>
+    #pumpWrap { max-width:760px; margin:16px auto; padding:0 16px; }
+    #pumpWrap h1{ font-size:22px; margin:8px 0 10px; color:#00e5ff; text-shadow:0 0 6px #00e5ff55; }
+    #pumpWrap .card{ background:var(--card-claro, #171a21); border-radius:16px; padding:18px; box-shadow:0 10px 30px rgba(0,0,0,.35); }
+    body.dark-mode #pumpWrap .card{ background:var(--card-oscuro, #171a21); }
+    #pumpWrap .row{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    #pumpWrap .btn{ border:none; border-radius:12px; padding:12px 16px; font-weight:800; cursor:pointer; }
+    #pumpWrap #btnRelay.on{ background:#00e676; color:#003a1f; }
+    #pumpWrap #btnRelay.off{ background:#f00909; color:#fff6ea; }
+    #pumpWrap #btnRelay:disabled{ opacity:.75; cursor:not-allowed; }
+    #pumpWrap .msg{ font-size:13px; margin-top:8px; }
+    #pumpWrap .msg.ok{ color:#69f0ae; } 
+    #pumpWrap .msg.err{ color:#ff5252; } 
+    #pumpWrap .muted{ color:#a9b3c1; }
+    #pumpWrap .grid{ display:grid; grid-template-columns: 1fr 1fr; gap:14px; margin-top:14px; }
+    @media (max-width:700px){ #pumpWrap .grid{ grid-template-columns: 1fr; } }
+    #pumpWrap code{ background:#0c0f13; padding:2px 6px; border-radius:6px; }
+    #pumpWrap .note{ font-size:13px; color:#a9b3c1; margin-top:8px; }
+  
+@keyframes blinkBorder {
+  0%   { box-shadow: 0 0 10px 2px red; }
+  50%  { box-shadow: 0 0 0 0 red; }
+  100% { box-shadow: 0 0 10px 2px red; }
+}
+.card.alerta, .card.critical { border: 2px solid red !important; animation: blinkBorder 1s infinite; }
+
+.config #alertInterval {
+  width: 60px !important;
+  height: 28px !important;
+  font-size: 14px;
+  padding: 2px 6px;
+  text-align: center;
+  border-radius: 6px;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+
+</style>
+
+<style>
+/* ===== INYECTADO: ocultar cualquier mapa previo ===== */
+#map, .map, .map-card { display: none !important; height: 0 !important; }
+
+.config #alertInterval {
+  width: 60px !important;
+  height: 28px !important;
+  font-size: 14px;
+  padding: 2px 6px;
+  text-align: center;
+  border-radius: 6px;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+
+</style>
+
+<style>
+/* 🔧 Fix: Mantener texto negro en el panel de configuración del mapa incluso en modo oscuro */
+body.dark-mode .sidebar-sectores,
+body.dark-mode .sidebar-sectores input,
+body.dark-mode .sidebar-sectores select,
+body.dark-mode .sidebar-sectores label,
+body.dark-mode .sidebar-sectores div,
+body.dark-mode .sidebar-sectores span,
+body.dark-mode .sidebar-sectores table,
+body.dark-mode .sidebar-sectores th,
+body.dark-mode .sidebar-sectores td {
+  color: #000 !important;
+  background-color: transparent !important;
+}
+
+.config #alertInterval {
+  width: 60px !important;
+  height: 28px !important;
+  font-size: 14px;
+  padding: 2px 6px;
+  text-align: center;
+  border-radius: 6px;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+
+</style>
+
+
+<style>
+/* 🔧 Fix v2: además del texto negro, forzar fondo blanco en panel y controles */
+body.dark-mode .sidebar-sectores {
+  background: rgba(255,255,255,0.97) !important;
+  color: #000 !important;
+}
+body.dark-mode .sidebar-sectores * {
+  color: #000 !important;
+}
+body.dark-mode .sidebar-sectores input,
+body.dark-mode .sidebar-sectores select,
+body.dark-mode .sidebar-sectores textarea {
+  background-color: #ffffff !important;
+  border-color: #cccccc !important;
+  color: #000 !important;
+}
+body.dark-mode .sidebar-sectores table {
+  background-color: #ffffff !important;
+}
+body.dark-mode .sidebar-sectores th {
+  background-color: #e9ecef !important;
+  color: #333 !important;
+}
+body.dark-mode .sidebar-sectores td {
+  background-color: #ffffff !important;
+  color: #000 !important;
+}
+/* Botón flotante (toggle) mantiene contraste */
+body.dark-mode .toggle-btn-sectores {
+  background: #1a73e8 !important;
+  color: #fff !important;
+}
+
+.config #alertInterval {
+  width: 60px !important;
+  height: 28px !important;
+  font-size: 14px;
+  padding: 2px 6px;
+  text-align: center;
+  border-radius: 6px;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+
+</style>
+
+
+<style>
+/* 🔧 Fix v3: Restaurar colores en la leyenda */
+body.dark-mode .sidebar-sectores .legend span:nth-child(1) {
+  background: #43a047 !important; /* Verde */
+  color: #fff !important;
+}
+body.dark-mode .sidebar-sectores .legend span:nth-child(2) {
+  background: #fbc02d !important; /* Amarillo */
+  color: #222 !important;
+}
+body.dark-mode .sidebar-sectores .legend span:nth-child(3) {
+  background: #e53935 !important; /* Rojo */
+  color: #fff !important;
+}
+
+.config #alertInterval {
+  width: 60px !important;
+  height: 28px !important;
+  font-size: 14px;
+  padding: 2px 6px;
+  text-align: center;
+  border-radius: 6px;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+
+</style>
+
+
+<style>
+/* 🔧 Fix v4: Inputs de umbrales más pequeños y compactos */
+.umbral-row input {
+  width: 50px !important;
+  height: 28px !important;
+  font-size: 14px !important;
+  padding: 3px 5px !important;
+  border-radius: 6px !important;
+}
+
+.config #alertInterval {
+  width: 60px !important;
+  height: 28px !important;
+  font-size: 14px;
+  padding: 2px 6px;
+  text-align: center;
+  border-radius: 6px;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+
+</style>
+
+
+<style>
+/* 🔧 Fix v5: Inputs de umbrales más estéticos y compactos */
+.umbral-row {
+  gap: 0.5rem !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+
+.umbral-row label {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+}
+
+.umbral-row input {
+  width: 45px !important;
+  height: 24px !important;
+  font-size: 13px !important;
+  padding: 2px 4px !important;
+  border-radius: 4px !important;
+}
+
+.config #alertInterval {
+  width: 60px !important;
+  height: 28px !important;
+  font-size: 14px;
+  padding: 2px 6px;
+  text-align: center;
+  border-radius: 6px;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+
+</style>
+
+
+<style>
+/* 🔧 Fix v6: Inputs y botón Guardar más compactos y estéticos */
+.umbral-row {
+  gap: 0.4rem !important;
+  justify-content: center !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+}
+
+.umbral-row label {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+.umbral-row input {
+  width: 40px !important;
+  height: 22px !important;
+  font-size: 12px !important;
+  padding: 1px 3px !important;
+  border-radius: 4px !important;
+}
+
+/* Botón Guardar compacto */
+.umbral-row button {
+  font-size: 12px !important;
+  padding: 3px 6px !important;
+  height: 24px !important;
+  border-radius: 4px !important;
+  background: #4CAF50 !important;
+  color: #fff !important;
+  border: none !important;
+  cursor: pointer !important;
+}
+.umbral-row button:hover {
+  background: #3e8e41 !important;
+}
+
+.config #alertInterval {
+  width: 60px !important;
+  height: 28px !important;
+  font-size: 14px;
+  padding: 2px 6px;
+  text-align: center;
+  border-radius: 6px;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+
+</style>
+
+
+<style>
+/* 🔧 Fix v7: Optimización fuerte de bloque de umbrales */
+.config .umbral-row {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  justify-content: center !important;
+  align-items: baseline !important;
+  margin-top: 6px !important;
+}
+
+.config .umbral-row label {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  padding: 0 !important;
+  margin: 0 6px !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.config .umbral-row input[type="number"] {
+  flex: 0 0 auto !important;     /* no crecer */
+  display: inline-block !important;
+  width: 44px !important;        /* compacto */
+  max-width: 60px !important;
+  height: 22px !important;
+  font-size: 12px !important;
+  padding: 1px 4px !important;
+  border-radius: 5px !important;
+  box-shadow: none !important;
+}
+
+.config .umbral-row button {
+  flex: 0 0 auto !important;
+  font-size: 12px !important;
+  padding: 4px 8px !important;
+  height: 26px !important;
+  border-radius: 5px !important;
+  background: #4CAF50 !important;
+  color: #fff !important;
+  border: none !important;
+}
+
+/* Evitar que reglas globales de inputs (como width:100%) los estiren */
+.config .umbral-row label input[type="number"] {
+  width: 44px !important;
+}
+
+.config #alertInterval {
+  width: 60px !important;
+  height: 28px !important;
+  font-size: 14px;
+  padding: 2px 6px;
+  text-align: center;
+  border-radius: 6px;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+
+</style>
+
+
+<style>
+/* 🔧 Fix v9: Unificar tamaños y espaciado para un look pro */
+:root{
+  --inp-w: 56px;
+  --inp-h: 28px;
+  --inp-fz: 14px;
+  --inp-px: 2px 6px;
+  --inp-radius: 8px;
+}
+
+/* Fila de umbrales */
+.config .umbral-row{
+  display:flex !important;
+  flex-wrap:wrap !important;
+  justify-content:center !important;
+  align-items:center !important;
+  gap:12px !important;
+  margin-top:8px !important;
+}
+
+/* Etiquetas (Temp>, Hum>, etc.) */
+.config .umbral-row label{
+  display:inline-flex !important;
+  align-items:center !important;
+  gap:6px !important;
+  font-size:15px !important;
+  font-weight:500 !important;
+  margin:0 4px !important;
+}
+
+/* Inputs numéricos de umbrales */
+.config .umbral-row input[type="number"]{
+  width:var(--inp-w) !important;
+  height:var(--inp-h) !important;
+  font-size:var(--inp-fz) !important;
+  padding:var(--inp-px) !important;
+  border-radius:var(--inp-radius) !important;
+  text-align:center !important;
+  flex:0 0 auto !important;
+}
+
+/* Input de intervalo arriba: mismo tamaño */
+.config #alertInterval{
+  width:var(--inp-w) !important;
+  height:var(--inp-h) !important;
+  font-size:var(--inp-fz) !important;
+  padding:var(--inp-px) !important;
+  border-radius:var(--inp-radius) !important;
+  text-align:center !important;
+  vertical-align:middle !important;
+}
+
+/* Botón Guardar compacto y consistente */
+.config .umbral-row button{
+  font-size:13px !important;
+  height:calc(var(--inp-h) + 2px) !important;
+  padding:4px 10px !important;
+  border-radius:var(--inp-radius) !important;
+  background:#2e7d32 !important;
+  color:#fff !important;
+  border:none !important;
+  flex:0 0 auto !important;
+}
+.config .umbral-row button:hover{ background:#256b2a !important; }
+
+/* Unidades (°C, %, L/min, V) con espaciado sutil */
+.config .umbral-row .unit{
+  margin-left:4px;
+  opacity:.9;
+  font-size:14px;
+}
+</style>
+
+
+<style>
+/* v12: Compact, uniform inputs & selects in the Google Maps "Sectores" sidebar */
+.sidebar-sectores input[type="number"],
+.sidebar-sectores input[type="text"],
+.sidebar-sectores select {
+  padding: 6px 8px !important;
+  border: 1px solid #ccc !important;
+  border-radius: 6px !important;
+  font-size: 14px !important;
+  width: 150px !important;
+  height: 32px !important;
+}
+</style>
+
+
+<style>
+/* v13: Compact inputs & selects specifically inside the Sectores table */
+.sidebar-sectores table input[type="number"],
+.sidebar-sectores table input[type="text"],
+.sidebar-sectores table select {
+  padding: 4px 6px !important;
+  font-size: 13px !important;
+  width: 100px !important;
+  height: 28px !important;
+  border-radius: 5px !important;
+}
+</style>
+
+</head>
+<body>
+  <!-- SPLASH -->
+  <div id="splash">
+    <div class="splash-content">
+      <h1>BLADEN</h1>
+      <p>20</p>
+      <button onclick="ocultarSplash()">Entrar</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <header>
+    <h1>📡 Dashboard Pivet – Protegido</h1>
+    <button id="toggleTheme">🌓 Tema</button>
+  </header>
+
+  <div class="config">
+    
+<div id="loginForm">
+  <label>👤 Usuario:
+    <input type="text" id="userInput" />
+  </label>
+  <label>🔑 Contraseña:
+    <input type="password" id="passInput" />
+  </label>
+  <button onclick="verificarLogin()">Iniciar sesión</button>
+</div>
+
+
+    <div id="loginStatus">--</div>
+
+    <div id="panelConfig" style="display:none;">
+      <div class="toolbar">
+        <label>
+          <input type="checkbox" id="bgEnabled" onchange="toggleBackground(this.checked)">
+          🔄 Seguir en segundo plano
+        </label>
+        <button id="wakeBtn" onclick="toggleWakeLock()">🛡️ Mantener pantalla activa</button>
+      </div>
+
+      <label style="display:block;margin-top:.6rem;">
+        <input type="checkbox" id="whatsEnabled" onchange="guardarPreferenciaWhatsApp()" /> Activar WhatsApp
+      </label>
+
+      <div style="margin: .5rem;">⏱️ Intervalo entre alertas (min):
+        <input id="alertInterval" type="number" min="1" value="1" style="width:60px;" onchange="guardarIntervalo()">
+      </div>
+
+      <div class="umbral-row">
+        <label>🌡️ Temp > <input id="thTemp" type="number" step="0.1"> °C</label>
+        <label>💧 Hum > <input id="thHum" type="number" step="0.1"> %</label>
+        <label>🚿 Flujo < <input id="thFlow" type="number" step="0.1"> L/min</label>
+        <label>🔋 Volt < <input id="thVolt" type="number" step="0.1"> V</label>
+        <button onclick="guardarUmbrales()">Guardar</button>
+      </div>
+
+            <button id="testBtn" onclick="probarWhatsApp()">📲 Probar WhatsApp</button>
+      <div id="lastWhatsApp">Último WhatsApp: --</div>
+      <!-- 🔌 PUMP – Control ON/OFF (field8) -->
+      
+      <section id="pumpWrap">
+  <div class="card">
+    <div class="row" style="flex-direction:column; align-items:center; gap:8px;">
+      <button id="btnRelay" class="btn off" aria-pressed="false" type="button">🔌 GUN: --</button>
+      <span id="relayLastTime" class="muted" style="display:block; text-align:center;">Último cambio: --</span>
+    </div>
+    <div id="relayMsg" class="msg" style="text-align:center;"></div>
+  </div>
+</section>
+
+      <!-- 🔌 FIN CONTROL GUN -->
+
+    <button id="logoutBtn" onclick="logout()" style="margin-top:12px;">🚪 Cerrar sesión</button>
+    </div>
+  </div>
+  <div id="lastUpdate">Última actualización: --</div>
+  <div class="cards" id="cardContainer"></div>
+  <canvas id="chartCanvas" height="120"></canvas>
+
+  <!-- MAPA -->
+  <section class="map-card">
+    <h2 style="text-align:center;margin:8px 0;">🗺️ Ubicación (GPS)</h2>
+    <div id="map"></div>
+    <div id="mapStatus">Sin coordenadas aún…</div>
+  </section>
+
+  <div id="notif" class="notif"></div>
+
+<script>
+  /* ====== SPLASH ====== */
+  function ocultarSplash() {
+    const el = document.getElementById('splash');
+    if (el) el.style.display = 'none';
+  }
+  // Sin auto-ocultar: el splash solo desaparece con el botón.
+
+  /* ====== CONSTANTES ====== */
+  const USER = "bladen";
+  const PASS = "28433";
+  const CHANNEL_ID = 3033478;
+  const READ_API_KEY = "217V6P5DIT9GRVLA";
+  const WRITE_API_KEY = "NAK04ON555J4UHDS";
+  
+// === Canal B (Control Relay) ===
+const CTRL_CHANNEL_ID    = 3073117;
+const CTRL_READ_API_KEY  = "DL1I0ZDKIO9NO862";
+const CTRL_WRITE_API_KEY = "Q0DTGZ8U7Q7ZFJG6";
+const notif = document.getElementById("notif");
+
+  let ledTimer = 0;
+  let timerInterval;
+  let chart;
+
+  const FIELDS = [
+    { field: "field1", label: "🌡️ Temp (°C)", color: "#ff6384" },
+    { field: "field2", label: "💧 Humedad (%)", color: "#36a2eb" },
+    { field: "field3", label: "🚿 Flujo (L/min)", color: "#4bc0c0" },
+    { field: "field4", label: "🔋 Voltaje (V)", color: "#9966ff" },
+    { field: "field5", label: "💨 Viento (km/h)", color: "#fcb045" }
+  ];
+
+  let umbrales = { temp: 30.0, hum: 70.0, flow: 0.0, volt: 3.0 };
+  let intervaloMinutos = 1;
+  const ultimosAlertas = {};
+
+  /* ====== MAPA (Leaflet) ====== */
+  let map, marker;
+  function ensureMap() {
+    if (!map) {
+      map = L.map('map', { zoomControl: true }).setView([0, 0], 2);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(map);
+    }
+  }
+  function updateMap(lat, lon) {
+    ensureMap();
+    const status = document.getElementById('mapStatus');
+    if (Number.isFinite(lat) && Number.isFinite(lon)) {
+      if (!marker) marker = L.marker([lat, lon]).addTo(map);
+      else marker.setLatLng([lat, lon]);
+      map.setView([lat, lon], 14);
+      status.textContent = `Lat: ${lat.toFixed(5)}, Lon: ${lon.toFixed(5)}`;
+    } else {
+      status.textContent = 'Sin coordenadas en el último feed.';
+    }
+  }
+
+  /* ====== UI helpers ====== */
+  function mostrarNotif(msg) {
+    // Toast interno
+    notif.textContent = msg;
+    notif.classList.add("show");
+    setTimeout(() => notif.classList.remove("show"), 3000);
+
+    // Notificación nativa si la página está oculta y hay permiso
+    if (document.hidden && window.Notification && Notification.permission === 'granted') {
+      try { new Notification('Dashboard Pivet', { body: msg }); } catch(e){}
+    }
+  }
+
+  async function pedirPermisoNotificaciones() {
+    if (!("Notification" in window)) return false;
+    if (Notification.permission === "granted") return true;
+    if (Notification.permission === "denied") return false;
+    const res = await Notification.requestPermission();
+    return res === "granted";
+  }
+
+  /* ====== Login ====== */
+  function verificarLogin() {
+    const user = document.getElementById("userInput").value;
+    const pass = document.getElementById("passInput").value;
+    if (user === USER && pass === PASS) {
+      localStorage.setItem("authOK", "1");
+      habilitarConfiguracion(true);
+      mostrarNotif("✅ Sesión iniciada");
+    } else {
+      alert("❌ Credenciales incorrectas");
+    }
+  }
+  function logout() {
+    localStorage.removeItem("authOK");
+    habilitarConfiguracion(false);
+    detenerBackground();
+    mostrarNotif("🚪 Sesión cerrada");
+  }
+  function habilitarConfiguracion(activo) {
+    document.getElementById("panelConfig").style.display = activo ? "block" : "none";
+    document.getElementById("loginForm").style.display = activo ? "none" : "block";
+    document.getElementById("logoutBtn").style.display = activo ? "inline-block" : "none";
+    document.getElementById("loginStatus").innerText = activo ? "✅ Sesión iniciada" : "--";
+  }
+
+  /* ====== Preferencias ====== */
+  function guardarUmbrales() {
+    umbrales.temp = parseFloat(document.getElementById("thTemp").value);
+    umbrales.hum  = parseFloat(document.getElementById("thHum").value);
+    umbrales.flow = parseFloat(document.getElementById("thFlow").value);
+    umbrales.volt = parseFloat(document.getElementById("thVolt").value);
+    localStorage.setItem("umbrales", JSON.stringify(umbrales));
+    mostrarNotif("💾 Umbrales guardados");
+    loadData();
+  }
+  function cargarUmbrales() {
+    const u = JSON.parse(localStorage.getItem("umbrales"));
+    if (u) umbrales = u;
+    document.getElementById("thTemp").value = umbrales.temp;
+    document.getElementById("thHum").value = umbrales.hum;
+    document.getElementById("thFlow").value = umbrales.flow;
+    document.getElementById("thVolt").value = umbrales.volt;
+  }
+  function guardarPreferenciaWhatsApp() {
+    const estado = document.getElementById("whatsEnabled").checked;
+    localStorage.setItem("whatsEnabled", estado ? "1" : "0");
+    mostrarNotif(estado ? "📲 WhatsApp activado" : "🔕 WhatsApp desactivado");
+  }
+  function cargarPreferenciaWhatsApp() {
+    const enabled = localStorage.getItem("whatsEnabled") === "1";
+    document.getElementById("whatsEnabled").checked = enabled;
+    return enabled;
+  }
+  function guardarIntervalo() {
+    intervaloMinutos = parseInt(document.getElementById("alertInterval").value);
+    localStorage.setItem("alertInterval", intervaloMinutos);
+    mostrarNotif("💾 Intervalo guardado");
+  }
+  function cargarIntervalo() {
+    const val = parseInt(localStorage.getItem("alertInterval"));
+    intervaloMinutos = isNaN(val) ? 1 : val;
+    document.getElementById("alertInterval").value = intervaloMinutos;
+  }
+
+  /* ====== Notificaciones WhatsApp ====== */
+  function enviarWhatsApp(msg) {
+    const url = `https://api.callmebot.com/whatsapp.php?phone=+5212311560234&text=${encodeURIComponent(msg)}&apikey=4036182`;
+    fetch(url)
+      .then(() => { actualizarUltimoWhatsApp(); mostrarNotif("✅ WhatsApp enviado"); })
+      .catch(() => { actualizarUltimoWhatsApp(); mostrarNotif("⚠️ WhatsApp con error"); });
+  }
+  function probarWhatsApp() { enviarWhatsApp("📡 Prueba de notificación desde el Dashboard [Pivet]"); }
+  function actualizarUltimoWhatsApp() {
+    const ahora = new Date().toLocaleString("es-MX");
+    document.getElementById("lastWhatsApp").innerText = "Último WhatsApp: " + ahora;
+    localStorage.setItem("ultimoWhatsApp", ahora);
+  }
+  function cargarUltimoWhatsApp() {
+    const t = localStorage.getItem("ultimoWhatsApp") || "--";
+    document.getElementById("lastWhatsApp").innerText = "Último WhatsApp: " + t;
+  }
+
+  /* ====== Datos + Gráfica + Mapa ====== */
+  function pintarUIconFeeds(data) {
+    const feeds = data.feeds || [];
+    const last = feeds[feeds.length - 1];
+
+    if (last) {
+      document.getElementById("lastUpdate").innerText = "Última actualización: " + new Date(last.created_at).toLocaleString("es-MX");
+    }
+
+    // Tarjetas
+    const cardContainer = document.getElementById("cardContainer");
+    cardContainer.innerHTML = "";
+    if (last) {
+      FIELDS.forEach((f, i) => {
+        const valNum = parseFloat(last[f.field]);
+        const val = isNaN(valNum) ? "--" : valNum.toFixed(1);
+        let isCritical = false;
+        if (i === 0 && valNum > umbrales.temp) isCritical = true;
+        if (i === 1 && valNum > umbrales.hum)  isCritical = true;
+        if (i === 2 && valNum < umbrales.flow) isCritical = true;
+        if (i === 3 && valNum < umbrales.volt) isCritical = true;
+
+        const ahora = Date.now();
+        const clave = f.field;
+        if (isCritical && (!ultimosAlertas[clave] || ahora - ultimosAlertas[clave] > intervaloMinutos * 60000)) {
+          ultimosAlertas[clave] = ahora;
+          if (document.getElementById("whatsEnabled").checked) {
+            enviarWhatsApp(`⚠️ Alerta: ${f.label} fuera de rango: ${val}`);
+          }
+          // Notificación nativa explícita de alerta cuando está oculto
+          if (document.hidden) {
+            mostrarNotif(`⚠️ ${f.label} fuera de rango: ${val}`);
+          }
+        }
+
+        const card = document.createElement("div");
+        card.className = "card" + (isCritical ? " critical" : "");
+        card.innerHTML = `<h2>${f.label}</h2><p style="font-size:1.4em;">${val}</p>`;
+        cardContainer.appendChild(card);
+      });
+    }
+
+    // Gráfica
+    if (chart) chart.destroy();
+    const labelDates = feeds.map(x => new Date(x.created_at));
+    const labels = labelDates.map(d => d.toLocaleTimeString("es-MX"));
+    const datasets = FIELDS.map(f => ({
+      label: f.label,
+      data: feeds.map(x => parseFloat(x[f.field])),
+      borderColor: f.color, fill: false, tension: 0.1
+    }));
+    chart = new Chart(document.getElementById("chartCanvas"), {
+      type: "line",
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        plugins: { 
+          legend: { position: "bottom" },
+          tooltip: {
+            callbacks: {
+              title: (items) => {
+                try {
+                  const i = items && items.length ? items[0].dataIndex : 0;
+                  const d = labelDates[i];
+                  if (!d) return "";
+                  const fecha = d.toLocaleDateString("es-MX");
+                  const hora  = d.toLocaleTimeString("es-MX");
+                  return `${hora}
+${fecha}`; // dos líneas: hora arriba, fecha abajo
+                } catch(e){ return ""; }
+              }
+            }
+          }
+        },
+        scales: {
+          x: { ticks: { color: document.body.classList.contains("dark-mode") ? "#eee" : "#333" } },
+          y: { ticks: { color: document.body.classList.contains("dark-mode") ? "#eee" : "#333" } }
+        }
+      }
+    });
+
+    // Geo desde field6/field7
+    const lat = last ? parseFloat(last.field6) : NaN;
+    const lon = last ? parseFloat(last.field7) : NaN;
+    updateMap(lat, lon);
+  }
+
+  async function loadData() {
+    try {
+      const res = await fetch(`https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds.json?api_key=${READ_API_KEY}&results=60`);
+      const data = await res.json();
+      pintarUIconFeeds(data);
+    } catch (e) {
+      console.error("Error cargando datos", e);
+    }
+  }
+
+  /* ====== Tema ====== */
+  function toggleTheme() {
+    document.body.classList.toggle("dark-mode");
+    localStorage.setItem("modoOscuro", document.body.classList.contains("dark-mode") ? "1" : "0");
+    loadData(); // recargar gráfico con colores de ejes
+  }
+  function cargarTema() {
+    if (localStorage.getItem("modoOscuro") === "1") {
+      document.body.classList.add("dark-mode");
+    }
+  }
+
+  /* ====== BACKGROUND: Worker + Notificaciones ====== */
+  let bgWorker = null;
+  let wakeLock = null;
+
+  async function toggleBackground(enabled) {
+    localStorage.setItem("bgEnabled", enabled ? "1" : "0");
+    if (enabled) {
+      const granted = await pedirPermisoNotificaciones();
+      if (!granted) mostrarNotif("ℹ️ Notificaciones del sistema no concedidas");
+      iniciarBackground();
+    } else {
+      detenerBackground();
+    }
+  }
+
+  function iniciarBackground() {
+    if (bgWorker) return;
+    // Código del Worker como Blob para no requerir archivo externo
+    const code = `
+      const CHANNEL_ID = ${CHANNEL_ID};
+      const READ_API_KEY = "${READ_API_KEY}";
+      let intervalMs = 30000;
+
+      async function loop() {
+        try {
+          const res = await fetch('https://api.thingspeak.com/channels/' + CHANNEL_ID + '/feeds.json?api_key=' + READ_API_KEY + '&results=60', {cache:'no-store'});
+          const data = await res.json();
+          const feeds = data.feeds || [];
+          const last = feeds[feeds.length - 1] || null;
+
+          postMessage({type:'data', data, lastAt: last ? last.created_at : null});
+        } catch (e) {
+          postMessage({type:'error', error: String(e)});
+        } finally {
+          setTimeout(loop, intervalMs);
+        }
+      }
+      onmessage = (ev) => {
+        if (ev.data && ev.data.type === 'setInterval' && ev.data.ms) {
+          intervalMs = ev.data.ms;
+        } else if (ev.data === 'stop') {
+          // No hay forma estándar de cerrar desde dentro sin self.close(); lo hacemos:
+          self.close();
+        }
+      };
+      loop();
+    `;
+    const blob = new Blob([code], { type: "application/javascript" });
+    const url = URL.createObjectURL(blob);
+    bgWorker = new Worker(url);
+
+    // Ajustar intervalo si el usuario configuró algo (aquí fijo a 30s como en la UI)
+    bgWorker.postMessage({type:'setInterval', ms: 30000});
+
+    bgWorker.onmessage = (ev) => {
+      const { type, data, led, lastAt } = ev.data || {};
+      if (type === 'data') {
+        // Guarda en localStorage para que no se pierda si está oculta
+        try { localStorage.setItem('bg_lastData', JSON.stringify(data)); } catch(e){}
+        if (!document.hidden) {
+          // Si la pestaña está visible, actualizamos la UI
+          pintarUIconFeeds(data);
+          } else {
+          // Si está oculta, mandamos un ping sutil (opcional)
+          if (window.Notification && Notification.permission === 'granted' && lastAt) {
+            new Notification('Dashboard Pivet', { body: `Datos actualizados: ${new Date(lastAt).toLocaleTimeString()}` });
+          }
+        }
+      } else if (type === 'error') {
+        // Guardamos el error por si hace falta depurar
+        console.warn('BG error:', ev.data.error);
+      }
+    };
+
+    document.addEventListener('visibilitychange', () => {
+      // Al volver visible, si hay datos guardados del worker, pinta sin esperar
+      if (!document.hidden) {
+        const raw = localStorage.getItem('bg_lastData');
+        if (raw) {
+          try { pintarUIconFeeds(JSON.parse(raw)); } catch(e){}
+        }
+      }
+    });
+    mostrarNotif("▶️ Segundo plano activado");
+  }
+
+  function detenerBackground() {
+    if (bgWorker) {
+      try { bgWorker.postMessage('stop'); } catch(e){}
+      try { bgWorker.terminate(); } catch(e){}
+      bgWorker = null;
+      mostrarNotif("⏹️ Segundo plano desactivado");
+    }
+  }
+
+  async function toggleWakeLock() {
+    // Solicita/Libera Wake Lock de pantalla
+    try {
+      if (!wakeLock) {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+          mostrarNotif("🛡️ Wake Lock activado");
+          wakeLock.addEventListener('release', () => { wakeLock = null; mostrarNotif("🔓 Wake Lock liberado"); });
+        } else {
+          mostrarNotif("⚠️ Wake Lock no soportado en este navegador");
+        }
+      } else {
+        await wakeLock.release(); // disparará el listener de release
+      }
+    } catch (e) {
+      mostrarNotif("⚠️ No fue posible cambiar Wake Lock");
+    }
+  }
+
+  // Guarda/restaura el estado del toggle de segundo plano
+  function cargarBackgroundPref() {
+    const enabled = localStorage.getItem('bgEnabled') === '1';
+    const chk = document.getElementById('bgEnabled');
+    if (chk) chk.checked = enabled;
+    if (enabled) iniciarBackground();
+  }
+
+  /* ====== Inicialización ====== */
+  cargarTema();
+  cargarUmbrales();
+  cargarIntervalo();
+  cargarPreferenciaWhatsApp();
+  cargarUltimoWhatsApp();
+  if (localStorage.getItem("authOK") === "1") habilitarConfiguracion(true);
+  document.getElementById("toggleTheme").addEventListener("click", toggleTheme);loadData();
+  setInterval(loadData, 30000);
+  cargarBackgroundPref();
+</script>
+
+<!-- 🔌 Script del PUMP -->
+<script>
+/* ======== CONFIG ======== */
+const RELAY_FIELD  = 1;
+
+/* ======== PERSISTENCIA (último estado confirmado) ======== */
+const LS_KEY = "relay_last_state_v1";
+function saveLastState(state, tsISO){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify({ state, ts: tsISO || new Date().toISOString() })); }catch(e){}
+}
+function loadLastState(){
+  try{ return JSON.parse(localStorage.getItem(LS_KEY)) || null; }catch(e){ return null; }
+}
+
+/* ======== UI helpers ======== */
+const relayBtn  = ()=>document.getElementById('btnRelay');
+const relayMsg  = ()=>document.getElementById('relayMsg');
+const relayLast = ()=>document.getElementById('relayLastTime');
+
+function setRelayUI(state){
+  const btn = relayBtn(); if(!btn) return;
+  const on = state===1;
+  btn.classList.toggle('on', on);
+  btn.classList.toggle('off', !on);
+  btn.textContent = on ? "🔌 GUN: ON" : "🔌 GUN: OFF";
+  btn.setAttribute('aria-pressed', on ? "true":"false");
+}
+function setRelayStatus(text, ok=true){
+  const el = relayMsg(); if(!el) return;
+  el.textContent = text || "";
+  el.className = "msg " + (ok ? "ok":"err");
+}
+function setRelayLast(tsISO){
+  try{
+    const el = relayLast(); if(!el) return;
+    const d = tsISO ? new Date(tsISO) : new Date();
+    el.textContent = "Último cambio: " + d.toLocaleString('es-MX',{hour12:true});
+  }catch(e){}
+}
+
+/* ======== Estado y timers ======== */
+let relayState = null; // 0=OFF, 1=ON
+let relayCooldownUntil = 0;
+const TS_MIN_INTERVAL_MS = 16000;
+const MAX_RETRIES = 3;
+let relayCountdownTimer = null;
+
+/* ======== ThingSpeak helpers ======== */
+async function readRelayState(){
+  try{
+    const url = `https://api.thingspeak.com/channels/${CTRL_CHANNEL_ID}/fields/${RELAY_FIELD}/last.json?api_key=${CTRL_READ_API_KEY}&_=${Date.now()}`;
+    const r = await fetch(url,{cache:'no-store'});
+    const j = await r.json();
+    const raw = j[`field${RELAY_FIELD}`];
+    const v = Number(raw);
+    if(!Number.isNaN(v)){
+      const newState = v>0?1:0;
+      const changed = (relayState===null) || (newState!==relayState);
+      relayState = newState; setRelayUI(relayState);
+      if(changed){
+        const when = j.created_at || null;
+        setRelayLast(when);
+        saveLastState(relayState, when);
+      }
+    }
+  }catch(e){ /* silencio */ }
+}
+
+async function writeRelayState(v){
+  try{
+    const resp = await fetch("https://api.thingspeak.com/update.json", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body: new URLSearchParams({ api_key: CTRL_WRITE_API_KEY, [`field${RELAY_FIELD}`]: String(v) })
+    });
+    const j = await resp.json().catch(()=>null);
+    const entryId = (j && typeof j==="object") ? j.entry_id : NaN;
+    const ok = !Number.isNaN(entryId) && entryId>0;
+    if(ok){ setRelayStatus(v? "GUN encendido":"GUN apagado", true); setRelayLast(); saveLastState(v?1:0); }
+    else { setRelayStatus("No se pudo escribir (posible límite de 15s o clave inválida).", false); }
+    return ok;
+  }catch(e){
+    setRelayStatus("Error de red al escribir en ThingSpeak.", false);
+    return false;
+  }
+}
+
+async function getChannelLastInfo(){
+  try{
+    const url = `https://api.thingspeak.com/channels/${CTRL_CHANNEL_ID}/feeds/last.json?_=${Date.now()}`;
+    const r = await fetch(url,{cache:'no-store'});
+    const j = await r.json();
+    const ts = j && j.created_at ? new Date(j.created_at).getTime() : null;
+    if(!ts) return null;
+    const diff = Date.now() - ts;
+    const msUntilOpen = Math.max(0, TS_MIN_INTERVAL_MS - diff);
+    return { lastAt: ts, msUntilOpen };
+  }catch(e){ return null; }
+}
+
+/* ======== Cuenta regresiva en el botón ======== */
+function startRelayCountdown(ms){
+  const btn = relayBtn(); if(!btn) return;
+  btn.disabled = true;
+  const base = (relayState===1) ? "🔌 GUN: ON" : "🔌 GUN: OFF";
+  const end = Date.now() + ms;
+  function tick(){
+    const left = Math.max(0, end - Date.now());
+    const s = Math.ceil(left/1000);
+    btn.textContent = `${base} (⏳ ${s}s)`;
+    if(left<=0){ stopRelayCountdown(); }
+  }
+  stopRelayCountdown();
+  relayCountdownTimer = setInterval(tick, 250);
+  tick();
+}
+function stopRelayCountdown(){
+  const btn = relayBtn();
+  if(btn){
+    btn.disabled = false;
+    setRelayUI(relayState===1?1:0);
+  }
+  if(relayCountdownTimer){ clearInterval(relayCountdownTimer); relayCountdownTimer=null; }
+}
+
+/* ======== Ventana mínima ThingSpeak ======== */
+async function ensureChannelOpenWithCountdown(){
+  const info = await getChannelLastInfo();
+  if(info && info.msUntilOpen>0){
+    startRelayCountdown(info.msUntilOpen);
+    await new Promise(res=>setTimeout(res, info.msUntilOpen));
+    stopRelayCountdown();
+  }
+}
+
+/* ======== Reintentos (3) ======== */
+async function doToggleWithRetries(next, tries){
+  await ensureChannelOpenWithCountdown();
+  setRelayStatus("Enviando…");
+  const ok = await writeRelayState(next);
+  if(ok) return true;
+  if(tries<=1){
+    setRelayStatus("No se pudo escribir después de reintentos.", false);
+    return false;
+  }
+  // Backoff pequeño antes del siguiente intento
+  startRelayCountdown(3000);
+  await new Promise(res=>setTimeout(res, 3000));
+  stopRelayCountdown();
+  return await doToggleWithRetries(next, tries-1);
+}
+
+/* ======== Handler del botón ======== */
+async function toggleRelay(){
+  const now = Date.now();
+  if(now < relayCooldownUntil){
+    const waitMs = relayCooldownUntil - now;
+    setRelayStatus("Espera un momento antes de otro cambio.", false);
+    startRelayCountdown(waitMs);
+    setTimeout(()=>{
+      if(Date.now() >= relayCooldownUntil){
+        stopRelayCountdown();
+        setRelayStatus("", true);
+      }
+    }, waitMs + 120);
+    return;
+  }
+  const next = (relayState===1) ? 0 : 1;
+  const ok = await doToggleWithRetries(next, MAX_RETRIES);
+  if(ok){
+    relayState = next;
+    setRelayUI(relayState);
+    const cd = Math.max(TS_MIN_INTERVAL_MS, 5000);
+    relayCooldownUntil = now + cd;
+    setRelayStatus("Cambio aplicado. Espera para el siguiente…", true);
+    startRelayCountdown(cd);
+    setTimeout(()=>{ stopRelayCountdown(); setRelayStatus("", true); }, cd + 120);
+
+    /* 👉 Notificación flotante al aplicar */
+    mostrarNotif(next ? "✅ GUN encendido" : "⏹️ GUN apagado");
+  }
+}
+
+/* ======== Bootstrap ======== */
+(function init(){
+  // 1) Pintar último estado guardado al entrar
+  const saved = loadLastState();
+  if(saved && (saved.state===0 || saved.state===1)){
+    relayState = saved.state;
+    setRelayUI(relayState);
+    setRelayLast(saved.ts || null);
+  } else {
+    setRelayUI(0);
+  }
+  // 2) Enlazar botón
+  const btn = relayBtn();
+  if(btn){ btn.addEventListener("click", toggleRelay); }
+  // 3) Lectura periódica desde ThingSpeak
+  readRelayState();
+  setInterval(readRelayState, 30000);
+})();
+</script>
+
+
+<!-- ===== Patch: PUMP worker por intención (modo ráfaga) ===== -->
+<script>
+(function(){
+  'use strict';
+  // Asumimos que existen en el dashboard:
+  // CHANNEL_ID, READ_API_KEY, WRITE_API_KEY, RELAY_FIELD
+  // Funciones utilitarias: relayBtn(), setBtnUI(state,pending), setRelayStatus(msg,ok),
+  //  readRelayState(), writeRelayState(target), startRelayCountdown(ms),
+  //  stopRelayCountdown(), fmtDate(d), persistLastChange(state) [opcional]
+  // Estados globales: relayState, relayCooldownUntil, TS_MIN_INTERVAL_MS
+  window.TS_MIN_INTERVAL_MS = window.TS_MIN_INTERVAL_MS || 15000;
+
+  let desiredState = null;   // 0/1 última intención
+  let applying     = false;  // loop activo
+  let intentVer    = 0;      // versión para cancelar intentos viejos
+  let debounceTmr  = null;   // compresor de clics
+
+  // Helpers mínimos si no existieran en el archivo original
+  window.relayBtn = window.relayBtn || function(){ return document.getElementById('relayBtn'); };
+  window.setBtnUI = window.setBtnUI || function(state, pending){
+    const btn = relayBtn(); if(!btn) return;
+    btn.classList.toggle('on', state===1);
+    btn.classList.toggle('off', state!==1);
+    const label = state===1 ? 'GUN: ON' : 'GUN: OFF';
+    btn.innerHTML = `🔌 <b>${label}${pending?' (pend.)':''}</b>`;
+  };
+  window.setRelayStatus = window.setRelayStatus || function(msg, ok){
+    const el = document.getElementById('status') || document.getElementById('relayStatus');
+    if(!el) return;
+    el.style.color = ok ? '#a1e3b8' : '#ffbdbd';
+    el.textContent = msg||'';
+  };
+  window.startRelayCountdown = window.startRelayCountdown || function(ms){
+    const badge = document.getElementById('cooldownBadge'); if(!badge) return;
+    const cd = document.getElementById('cdSecs') || badge.querySelector('[data-cd]') || badge;
+    badge.style.display = 'inline-flex';
+    function tick(){
+      const left = Math.max(0, Math.ceil(((window.relayCooldownUntil||0) - Date.now())/1000));
+      cd.textContent = left;
+      if(left<=0){ badge.style.display='none'; clearInterval(tmr); }
+    }
+    tick();
+    const tmr = setInterval(tick, 250);
+  };
+  window.stopRelayCountdown = window.stopRelayCountdown || function(){
+    const badge = document.getElementById('cooldownBadge'); if(badge) badge.style.display='none';
+  };
+
+  async function getLastFeedTime(){
+    try{
+      const url = `https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds/last.json?api_key=${CTRL_READ_API_KEY}`;
+      const res = await fetch(url, {cache:'no-store'});
+      const data = await res.json();
+      return new Date(data.created_at).getTime();
+    }catch(_){ return 0; }
+  }
+  async function ensureChannelOpenWithCountdown(){
+    const last = await getLastFeedTime();
+    const now  = Date.now();
+    const waitMs = Math.max(0, (last + window.TS_MIN_INTERVAL_MS) - now);
+    if(waitMs > 0){
+      window.relayCooldownUntil = now + waitMs;
+      startRelayCountdown(waitMs);
+      let left = waitMs;
+      while(left > 0){
+        await new Promise(r=>setTimeout(r, Math.min(250, left)));
+        const n = Date.now();
+        left = (last + window.TS_MIN_INTERVAL_MS) - n;
+      }
+      stopRelayCountdown();
+    }
+  }
+  async function verifyApplied(target){
+    try{ await new Promise(r => setTimeout(r, 900)); }catch(e){}
+    if(typeof readRelayState === 'function'){ await readRelayState(); }
+    return (window.relayState === target);
+  }
+  function scheduleApply(){
+    if(debounceTmr) clearTimeout(debounceTmr);
+    debounceTmr = setTimeout(()=>{
+      debounceTmr = null;
+      if(!applying) applyDesiredLoop();
+    }, 350); // colapsa clics rápidos
+  }
+  
+async function applyDesiredLoop(){
+  applying = true;
+  try{
+    while(desiredState !== null){
+      const myVer = intentVer;
+      const target = desiredState;
+      await ensureChannelOpenWithCountdown();
+      if(myVer !== intentVer) continue; // usuario cambió de idea
+
+      setRelayStatus("Enviando…");
+      const ok = await writeRelayState(target);
+      if(!ok){
+        // Un solo reintento suave si falló la escritura HTTP
+        await new Promise(r=>setTimeout(r, 1200));
+        const ok2 = await writeRelayState(target);
+        if(!ok2){
+          setRelayStatus("No se confirmó el cambio; espera y vuelve a intentar.", false);
+          // salimos del bucle para no insistir; usuario puede volver a pulsar
+          desiredState = null;
+          break;
+        }
+      }
+
+      // Escritura OK: damos por aplicado SIN requerir confirmación inmediata (sin ACK).
+      relayState = target;
+      setBtnUI(target, false);
+      setRelayStatus("Cambio aplicado. Espera para el siguiente…", true);
+
+      /* 👉 Notificación flotante al aplicar (patch por intención) */
+      try{ if (typeof mostrarNotif === 'function') { mostrarNotif(target ? "✅ GUN encendido" : "⏹️ GUN apagado"); } }catch(_){}
+
+      const cd = Math.max(window.TS_MIN_INTERVAL_MS || 15000, 4000);
+      window.relayCooldownUntil = Date.now() + cd;
+      startRelayCountdown(cd);
+      // Limpieza y fin de intención
+      desiredState = null;
+      await new Promise(r=>setTimeout(r, cd + 50));
+      stopRelayCountdown();
+    }
+  } finally {
+    applying = false;
+  }
+}
+
+  // Sobrescribe el handler del botón para programar intención
+  window.toggleRelay = function(){
+    const base = (desiredState === 0 || desiredState === 1) ? desiredState : (window.relayState===1?1:0);
+    const next = base === 1 ? 0 : 1;
+    desiredState = next;
+    intentVer++;
+    setRelayStatus(`Programado: ${next ? "ON" : "OFF"}`, true);
+    setBtnUI(next, true);
+    scheduleApply();
+  };
+
+  // Conecta el click si es necesario
+  try{
+    const b = relayBtn && relayBtn();
+    if(b){ b.removeEventListener('click', window.toggleRelay); b.addEventListener('click', window.toggleRelay); }
+  }catch(_){}
+})();
+</script>
+<!-- ===== Fin del patch ===== -->
+
+
+<script>
+// ===== INYECTADO: neutralizar lógica previa de mapa (si existiera) =====
+try { window.ensureMap = function(){ /* noop */ }; } catch(e) {}
+try { window.updateMap = function(){ /* noop */ }; } catch(e) {}
+</script>
+
+
+<!-- ===== INYECTADO: Google Maps Sectores + Grados ===== -->
+<style>
+  html, body { height: 100%; }
+  #gmap { height: 100vh; width: 100%; position: relative; }
+  .sidebar-sectores {
+    position: fixed; z-index: 2000; top: 0; left: 0; height: 100%; width: 500px; max-width: 90%;
+    background: rgba(255,255,255,0.95); padding: 16px; box-shadow: 2px 0 16px rgba(0,0,0,.2);
+    transform: translateX(-100%); transition: transform .3s ease-in-out; display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
+  }
+  .sidebar-sectores.open { transform: translateX(0); }
+  .toggle-btn-sectores {
+    position: fixed; z-index: 2001; top: 16px; left: 16px; padding: 8px; border: none; border-radius: 6px; background: #1a73e8; color: #fff; cursor: pointer; font-size: 14px; transition: left .3s ease-in-out;
+  }
+  .toggle-btn-sectores.open { left: 516px; }
+  .panel-header { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; color: #1a3c5e; }
+  .pill { padding: 4px 10px; border-radius: 12px; background: #1a73e8; color: #fff; font-size: 12px; font-weight: 500; }
+  .section { margin-top: 12px; }
+  .section-title { font-size: 14px; font-weight: 600; color: #333; margin-bottom: 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .legend span { padding: 4px 10px; border-radius: 12px; font-size: 12px; color: #fff; margin-right: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; background: #f9f9f9; border-radius: 8px; overflow: hidden; }
+  th, td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; }
+  th { background: #e9ecef; font-weight: 600; }
+  input[type="number"], input[type="text"], select {
+    padding: 10px !important; border: 1px solid #ddd; border-radius: 10px !important; font-size: 16px !important; width: 100% !important; height: 42px !important;
+  }
+  @media (max-width: 600px) {
+    .sidebar-sectores { width: 100%; }
+    .toggle-btn-sectores.open { left: calc(100% - 44px); }
+  }
+
+.config #alertInterval {
+  width: 60px !important;
+  height: 28px !important;
+  font-size: 14px;
+  padding: 2px 6px;
+  text-align: center;
+  border-radius: 6px;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+
+</style>
+
+<div id="gmap"></div>
+<button id="toggleSidebarSectores" class="toggle-btn-sectores">►</button>
+
+<div class="sidebar-sectores">
+  <div class="panel-header">Riego por Sectores <span class="pill">Px</span></div>
+
+  <div class="section">
+    <div class="section-title">Leyenda</div>
+    <div class="legend">
+      <span style="background:#43a047">Apta</span>
+      <span style="background:#fbc02d;color:#222">Posible</span>
+      <span style="background:#e53935">No apta</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Información</div>
+    <div class="row"><b>Destino:</b> <span id="px_lat">—</span>, <span id="px_lng">—</span></div>
+    <div class="row"><b>Hora:</b> <span id="px_hora">—</span></div>
+    <div class="row">
+      <b>Ángulo:</b> <span id="px_bearing">—</span> •
+      <b>Sector:</b> <span id="px_sector">—</span> •
+      <b>Tipo:</b> <span id="px_tipo">—</span>
+    </div>
+    <div class="row"><b>Dirección:</b> <span id="px_dir">—</span></div>
+    <div class="row"><b>Estado:</b> <span id="px_status">Cargando…</span></div>
+    <div class="row"><b>Relay Gun:</b> <span id="px_relayState">—</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Configuración</div>
+    <div class="row">
+      <b>Centro:</b>
+      <div class="row" style="gap:12px">
+        <div>
+          <div>Lat</div>
+          <input id="px_inpLat" type="number" step="0.000001" />
+        </div>
+        <div>
+          <div>Lng</div>
+          <input id="px_inpLng" type="number" step="0.000001" />
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Radio (m): <input id="px_inpRadio" type="number" min="20" step="10" /></label>
+      <label><input id="px_chkPath" type="checkbox"> Mostrar trayecto</label>
+    </div>
+    <div class="row">
+      <label><input id="px_chkDegrees" type="checkbox"> Mostrar grados</label>
+      <label> Cada
+        <select id="px_selDegStep">
+          <option value="10">10°</option>
+          <option value="15">15°</option>
+          <option value="30" selected>30°</option>
+          <option value="45">45°</option>
+          <option value="90">90°</option>
+        </select>
+      </label>
+      <label><input id="px_chkAutoFrame" type="checkbox"> Autoencuadre</label>
+    </div>
+    <div class="row" style="gap:8px; flex-wrap:wrap;">
+      <button id="px_btnRefreshNow">🔄 Actualizar</button>
+      <button id="px_btnSave">💾 Guardar</button>
+      <button id="px_btnAdd">➕ Nuevo sector</button>
+      <button id="px_btnReset">↩️ Restablecer</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Sectores</div>
+    <table>
+      <thead>
+        <tr><th>Nombre</th><th>Desde°</th><th>Hasta°</th><th>Tipo</th><th></th></tr>
+      </thead>
+      <tbody id="px_tb"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+/* ============== LÓGICA SECTORES (prefijo px_) ============== */
+const TS_CHANNEL_ID   = 3033478;
+const TS_READ_API_KEY = "217V6P5DIT9GRVLA";
+const TS_RESULTS      = 50;
+
+// CONTROL
+const TS_CTRL_CHANNEL_ID   = 3073117;
+const TS_CTRL_READ_APIKEY  = "DL1I0ZDKIO9NO862";
+const TS_CTRL_WRITE_APIKEY = "Q0DTGZ8U7Q7ZFJG6";
+const TS_CTRL_FIELD        = 3;
+
+const AUTO_REFRESH_MS = 15000;
+
+const DEFAULT_CENTER = { lat: 34.503659, lng: -78.559144 };
+let BASE = { ...DEFAULT_CENTER, nombre: "Centro" };
+let RADIO_M = 220;
+
+// Filtros
+const MAX_DIST_FROM_BASE_M = 1000;
+const MAX_JUMP_M           = 250;
+const MAX_POINTS           = 30;
+
+const TIPO_DEF = {
+  "Apta":       { color: "#43a047", op: 0.35 },
+  "Posible":    { color: "#fbc02d", op: 0.35 },
+  "No apta":    { color: "#e53935", op: 0.35 }
+};
+
+const DEFAULT_SECTORES = [
+  { nombre: "Sector 1", tipo: "No apta", desde: 0,   hasta: 200 },
+  { nombre: "Sector 2", tipo: "Posible", desde: 200, hasta: 220 },
+  { nombre: "Sector 3", tipo: "No apta", desde: 220, hasta: 280 },
+  { nombre: "Sector 4", tipo: "Apta",   desde: 280, hasta: 359 }
+];
+
+// Persistencia
+const STORAGE_KEY            = "riego_sectores_config_v1";
+const STORAGE_KEY_RADIO      = "riego_radio_m";
+const STORAGE_KEY_SHOWPATH   = "riego_show_path";
+const STORAGE_KEY_CENTER     = "riego_center_latlng_v1";
+const STORAGE_KEY_SHOWDEG    = "riego_show_degrees";
+const STORAGE_KEY_DEG_STEP   = "riego_deg_step";
+const STORAGE_KEY_AUTOFRAME  = "riego_auto_frame";
+
+let gmap, markerBase, markerDestino, polyLinea, polyTrayecto, px_sectorPolys = [];
+let SECTORES = [];
+let ultimoDestinoValido = null;
+let showDegrees = true;
+let degreeStep = 30;
+let autoFrame = false;
+let degreeMarkers = [];
+
+// Números de trayectoria
+let pointLabels = [];
+function clearPointLabels(){ pointLabels.forEach(m=>m.setMap(null)); pointLabels=[]; }
+
+let showPathOn = true;
+
+// ThingSpeak control
+let lastSentValue = null;
+let lastSentAt = 0;
+const MIN_WRITE_MS = 16000;
+
+// Movimiento/Estático
+let lastInApta = null;
+let lastMoveAt = Date.now();
+const STATIC_MS = 60000;
+const MOVE_MIN_DIST_M = 3;
+const MOVE_MIN_DEG = 2.0;
+
+const STALE_MS = 120000;
+
+function setStatus(msg, isWarn=false){
+  const el=document.getElementById("px_status");
+  el.textContent=msg; el.className=isWarn?"warn":"";
+}
+function setRelayStatus(v, ok, errMsg=""){
+  const el=document.getElementById("px_relayState");
+  const time=new Date().toLocaleTimeString();
+  el.textContent = ok ? `field3=${v} (OK ${time})` : `Error al enviar (${errMsg})`;
+}
+
+// Persistencia
+function loadSectors(){
+  try{ const raw=localStorage.getItem(STORAGE_KEY);
+    if(raw){ const parsed=JSON.parse(raw);
+      if(Array.isArray(parsed) && parsed.length){ return parsed.map(s=>({
+        nombre:String(s.nombre ?? "Sector"),
+        tipo:["Apta","Posible","No apta"].includes(s.tipo)?s.tipo:"Posible",
+        desde:Number.isFinite(+s.desde)?+s.desde:0,
+        hasta:Number.isFinite(+s.hasta)?+s.hasta:30
+      })); }
+    }
+  }catch(e){}
+  return DEFAULT_SECTORES.slice();
+}
+function saveSectors(){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(SECTORES)); setStatus("Guardado"); }catch{ setStatus("No se pudo guardar", true);} }
+function resetSectors(){
+  SECTORES=DEFAULT_SECTORES.slice(); saveSectors();
+  BASE.lat=DEFAULT_CENTER.lat; BASE.lng=DEFAULT_CENTER.lng; saveCenter();
+  const ilat=document.getElementById("px_inpLat"); const ilng=document.getElementById("px_inpLng");
+  if(ilat) ilat.value=BASE.lat.toFixed(6); if(ilng) ilng.value=BASE.lng.toFixed(6);
+  if(markerBase) markerBase.setPosition(BASE);
+  if(polyLinea && markerDestino) polyLinea.setPath([BASE, markerDestino.getPosition()]);
+  renderEditor(); buildSectors(); drawDegreeLabels(); actualizar(true);
+}
+function loadRadio(){ const n=+localStorage.getItem(STORAGE_KEY_RADIO); return Number.isFinite(n)&&n>10?n:RADIO_M; }
+function saveRadio(){ localStorage.setItem(STORAGE_KEY_RADIO, String(RADIO_M)); }
+function loadShowPath(){ return localStorage.getItem(STORAGE_KEY_SHOWPATH)!=="false"; }
+function saveShowPath(v){ localStorage.setItem(STORAGE_KEY_SHOWPATH, v?"true":"false"); }
+function loadCenter(){
+  try{ const raw=localStorage.getItem(STORAGE_KEY_CENTER);
+    if(raw){ const {lat,lng}=JSON.parse(raw);
+      if(Number.isFinite(+lat)&&Math.abs(+lat)<=90&&Number.isFinite(+lng)&&Math.abs(+lng)<=180){ BASE.lat=+lat; BASE.lng=+lng; }
+    }
+  }catch(e){}
+}
+function saveCenter(){ localStorage.setItem(STORAGE_KEY_CENTER, JSON.stringify({lat:BASE.lat,lng:BASE.lng})); }
+function loadDegreePrefs(){ showDegrees=localStorage.getItem(STORAGE_KEY_SHOWDEG)!=="false"; const s=+localStorage.getItem(STORAGE_KEY_DEG_STEP); degreeStep=[10,15,30,45,90].includes(s)?s:30; }
+function saveDegreePrefs(){ localStorage.setItem(STORAGE_KEY_SHOWDEG, showDegrees?"true":"false"); localStorage.setItem(STORAGE_KEY_DEG_STEP, String(degreeStep)); }
+function loadAutoFrame(){ autoFrame = localStorage.getItem(STORAGE_KEY_AUTOFRAME) === "true"; }
+function saveAutoFrame(v){ localStorage.setItem(STORAGE_KEY_AUTOFRAME, v?"true":"false"); }
+
+// Geo utils
+function parseCoord(v){ if(v==null) return NaN; if(typeof v==="number") return v; if(typeof v==="string"){ return parseFloat(v.trim().replace(",",".")); } return NaN; }
+function haversineMeters(a,b){
+  const R=6371000, φ1=a.lat*Math.PI/180, φ2=b.lat*Math.PI/180, dφ=(b.lat-a.lat)*Math.PI/180, dλ=(b.lng-a.lng)*Math.PI/180;
+  const sinDφ=Math.sin(dφ/2), sinDλ=Math.sin(dλ/2); const h=sinDφ*sinDφ+Math.cos(φ1)*Math.cos(φ2)*sinDλ*sinDλ;
+  return 2*R*Math.asin(Math.min(1,Math.sqrt(h)));
+}
+function destPoint(lat,lng,bearingDeg,distMeters){
+  const R=6371000, br=bearingDeg*Math.PI/180, φ1=lat*Math.PI/180, λ1=lng*Math.PI/180, δ=distMeters/R;
+  const sinφ1=Math.sin(φ1), cosφ1=Math.cos(φ1); const sinδ=Math.sin(δ), cosδ=Math.cos(δ);
+  const sinbr=Math.sin(br), cosbr=Math.cos(br);
+  const sinφ2=sinφ1*cosδ+cosφ1*sinδ*cosbr; const φ2=Math.asin(sinφ2);
+  const y=sinbr*sinδ*cosφ1; const x=cosδ - sinφ1*sinφ2; const λ2=λ1+Math.atan2(y,x);
+  return {lat:φ2*180/Math.PI, lng:λ2*180/Math.PI};
+}
+function bearingFromTo(a,b){
+  const φ1=a.lat*Math.PI/180, φ2=b.lat*Math.PI/180, Δλ=(b.lng-a.lng)*Math.PI/180;
+  const y=Math.sin(Δλ)*Math.cos(φ2);
+  const x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
+  return (Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+
+// Sectores
+function makeSector(center,r,startDeg,endDeg,fillColor,fillOpacity){
+  const step=2, path=[{lat:center.lat,lng:center.lng}];
+  for(let a=startDeg;a<=endDeg;a+=step) path.push(destPoint(center.lat, center.lng, a, r));
+  path.push(destPoint(center.lat, center.lng, endDeg, r), {lat:center.lat,lng:center.lng});
+  return new google.maps.Polygon({ paths:path, strokeColor:fillColor, strokeOpacity:.9, strokeWeight:1, fillColor, fillOpacity, map:gmap });
+}
+function buildSectors(){
+  px_sectorPolys.forEach(s=>{ if(s.poly) s.poly.setMap(null); if(s.label) s.label.setMap(null); });
+  px_sectorPolys=[];
+  for(const s of SECTORES){
+    const def=TIPO_DEF[s.tipo]||TIPO_DEF["Posible"];
+    const start=((+s.desde%360)+360)%360, end=((+s.hasta%360)+360)%360;
+    const poly=makeSector(BASE, RADIO_M, start, end, def.color, def.op);
+    const mid=(start<=end)?(start+end)/2:((start+end+360)/2)%360;
+    const labelPos=destPoint(BASE.lat, BASE.lng, mid, RADIO_M*0.6);
+    const label=new google.maps.Marker({ position:labelPos, map:gmap, icon:{path:google.maps.SymbolPath.CIRCLE, scale:0},
+      label:{ text:String(s.nombre||s.tipo), color:"#333", fontSize:"12px", fontWeight:"600" }});
+    px_sectorPolys.push({ poly, label, def:{...s, color:def.color, op:def.op, desde:start, hasta:end}, _mid:mid });
+  }
+}
+
+// Grados
+function clearDegreeLabels(){ degreeMarkers.forEach(m=>m.setMap(null)); degreeMarkers=[]; }
+function drawDegreeLabels(){
+  clearDegreeLabels(); if(!showDegrees) return;
+  const majors=new Set([90,180,270]); const outer=RADIO_M*1.02;
+  const pos0=destPoint(BASE.lat, BASE.lng, 5, outer);
+  degreeMarkers.push(new google.maps.Marker({ position:pos0, map:gmap, icon:{path:google.maps.SymbolPath.CIRCLE, scale:0},
+    label:{text:"0°", color:"#000", fontSize:"16px", fontWeight:"700"}}));
+  const pos360=destPoint(BASE.lat, BASE.lng, -5, outer);
+  degreeMarkers.push(new google.maps.Marker({ position:pos360, map:gmap, icon:{path:google.maps.SymbolPath.CIRCLE, scale:0},
+    label:{text:"360°", color:"#000", fontSize:"16px", fontWeight:"700"}}));
+  for(let a=degreeStep;a<360;a+=degreeStep){
+    const pos=destPoint(BASE.lat, BASE.lng, a, outer);
+    const isMajor=majors.has(a);
+    degreeMarkers.push(new google.maps.Marker({ position:pos, map:gmap, icon:{path:google.maps.SymbolPath.CIRCLE, scale:0},
+      label:{text:`${a}°`, color:isMajor?"#000":"#222", fontSize:isMajor?"16px":"12px", fontWeight:isMajor?"700":"600"}}));
+  }
+}
+
+// Editor
+function renderEditor(){
+  const tbody=document.getElementById("px_tb"); tbody.innerHTML="";
+  SECTORES.forEach((s,i)=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML = `
+      <td><input type="text" value="${s.nombre}" data-k="nombre"></td>
+      <td><input type="number" value="${s.desde}" data-k="desde" step="1" min="0" max="360"></td>
+      <td><input type="number" value="${s.hasta}" data-k="hasta" step="1" min="0" max="360"></td>
+      <td>
+        <select data-k="tipo">
+          ${Object.keys(TIPO_DEF).map(t=>`<option ${t===s.tipo?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </td>
+      <td><button data-act="del">✕</button></td>`;
+    tr.querySelectorAll("input,select").forEach(el=>{
+      el.onchange=()=>{ SECTORES[i][el.dataset.k]=(el.tagName==="SELECT"||el.dataset.k==="nombre")?el.value:parseFloat(el.value); autoSave(); };
+    });
+    tr.querySelector("[data-act='del']").onclick=()=>{ SECTORES.splice(i,1); renderEditor(); buildSectors(); saveSectors(); drawDegreeLabels(); };
+    tbody.appendChild(tr);
+  });
+}
+let saveTimer=null;
+function autoSave(){ if(saveTimer) clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ buildSectors(); saveSectors(); drawDegreeLabels(); }, 400); }
+
+// ThingSpeak write
+async function sendField3(value){
+  try{
+    const body=new URLSearchParams({ api_key: TS_CTRL_WRITE_APIKEY });
+    body.append(`field${TS_CTRL_FIELD}`, String(value));
+    const r=await fetch("https://api.thingspeak.com/update.json",{ method:"POST", headers:{ "Content-Type":"application/x-www-form-urlencoded" }, body, cache:"no-store" });
+    const js=await r.json().catch(()=>({}));
+    if(r.ok && js && js.entry_id){ lastSentValue=value; lastSentAt=Date.now(); setRelayStatus(value,true); }
+    else{ throw new Error((js&&js.error)?js.error:"Respuesta no válida"); }
+  }catch(e){ setRelayStatus(value,false,e.message||e); }
+}
+
+// Leer último estado
+async function fetchRelayState(){
+  try{
+    const url=`https://api.thingspeak.com/channels/${TS_CTRL_CHANNEL_ID}/fields/${TS_CTRL_FIELD}.json?api_key=${TS_CTRL_READ_APIKEY}&results=1`;
+    const r=await fetch(url,{cache:"no-store"});
+    if(!r.ok) throw new Error("ThingSpeak error");
+    const data=await r.json(); const feeds=data.feeds||[];
+    if(!feeds.length) throw new Error("Sin datos field3");
+    const f=feeds[0]; const val=f[`field${TS_CTRL_FIELD}`]; const time=new Date(f.created_at).toLocaleString();
+    const estado=(val==="1")?"ON":"OFF";
+    document.getElementById("px_relayState").textContent = `Gun: ${estado} (Último ${time})`;
+  }catch(e){ document.getElementById("px_relayState").textContent="Error leyendo Relay Gun"; console.error(e); }
+}
+
+// Init
+function initPxMap(){
+  loadCenter(); loadDegreePrefs(); loadAutoFrame();
+  SECTORES=loadSectors(); RADIO_M=loadRadio();
+  showPathOn = loadShowPath();
+
+  gmap=new google.maps.Map(document.getElementById("gmap"),{
+    center:BASE, zoom:17, mapTypeId:"satellite", mapTypeControl:true,
+    mapTypeControlOptions:{ position:google.maps.ControlPosition.TOP_RIGHT },
+    zoomControl:true, streetViewControl:false, fullscreenControl:true
+  });
+
+  markerBase   = new google.maps.Marker({ position:BASE, map:gmap, label:"A", title:"Centro" });
+  markerDestino= new google.maps.Marker({ position:BASE, map:gmap, label:"B", title:"Destino" });
+
+  polyLinea   = new google.maps.Polyline({ path:[BASE,BASE], geodesic:true, strokeColor:"#000", strokeOpacity:1, strokeWeight:4, map:gmap });
+  polyTrayecto= new google.maps.Polyline({ path:[], geodesic:true, strokeColor:"#1a73e8", strokeOpacity:.9, strokeWeight:3, map:gmap });
+  polyTrayecto.setVisible(showPathOn);
+
+  buildSectors(); renderEditor(); drawDegreeLabels();
+
+  const inputRadio=document.getElementById("px_inpRadio"); inputRadio.value=RADIO_M;
+  inputRadio.onchange=()=>{ const v=+inputRadio.value; if(Number.isFinite(v)&&v>10){ RADIO_M=v; saveRadio(); buildSectors(); drawDegreeLabels(); } };
+
+  const chkPath=document.getElementById("px_chkPath"); chkPath.checked=showPathOn;
+  chkPath.onchange=()=>{ showPathOn=chkPath.checked; polyTrayecto.setVisible(showPathOn); saveShowPath(showPathOn); if(!showPathOn){ clearPointLabels(); } else { actualizar(true); } };
+
+  const inpLat=document.getElementById("px_inpLat"); const inpLng=document.getElementById("px_inpLng");
+  inpLat.value=BASE.lat.toFixed(6); inpLng.value=BASE.lng.toFixed(6);
+  function onCenterChange(){
+    const la=parseCoord(inpLat.value), lo=parseCoord(inpLng.value);
+    if(Number.isFinite(la)&&Math.abs(la)<=90&&Number.isFinite(lo)&&Math.abs(lo)<=180){
+      BASE.lat=la; BASE.lng=lo; saveCenter(); markerBase.setPosition(BASE); polyLinea.setPath([BASE, markerDestino.getPosition()]);
+      buildSectors(); drawDegreeLabels(); actualizar(true);
+    }else setStatus("Centro inválido", true);
+  }
+  inpLat.addEventListener("change", onCenterChange); inpLng.addEventListener("change", onCenterChange);
+
+  document.getElementById("px_btnAdd").onclick=()=>{ SECTORES.push({nombre:"Nuevo", tipo:"Posible", desde:0, hasta:30}); renderEditor(); buildSectors(); saveSectors(); drawDegreeLabels(); };
+  document.getElementById("px_btnSave").onclick=()=>{ buildSectors(); saveSectors(); drawDegreeLabels(); };
+  document.getElementById("px_btnReset").onclick=()=>{ if(confirm("¿Restablecer por defecto (incluye Centro)?")) resetSectors(); };
+  document.getElementById("px_btnRefreshNow").onclick=()=>{ actualizar(true); fetchRelayState(); };
+
+  const chkDeg=document.getElementById("px_chkDegrees");
+  const selStep=document.getElementById("px_selDegStep");
+  chkDeg.checked=showDegrees; selStep.value=String(degreeStep);
+  chkDeg.onchange=()=>{ showDegrees=chkDeg.checked; saveDegreePrefs(); drawDegreeLabels(); };
+  selStep.onchange=()=>{ degreeStep=+selStep.value; saveDegreePrefs(); drawDegreeLabels(); };
+
+  const chkAuto=document.getElementById("px_chkAutoFrame"); chkAuto.checked=autoFrame;
+  chkAuto.onchange=()=>{ autoFrame=chkAuto.checked; saveAutoFrame(autoFrame); };
+
+  const toggleBtn=document.getElementById("toggleSidebarSectores");
+  const sidebar=document.querySelector(".sidebar-sectores");
+  toggleBtn.onclick=()=>{ sidebar.classList.toggle("open"); toggleBtn.classList.toggle("open"); toggleBtn.textContent=sidebar.classList.contains("open")?"◄":"►"; };
+
+  actualizar(); fetchRelayState();
+  setInterval(()=>{ actualizar(); fetchRelayState(); }, AUTO_REFRESH_MS);
+}
+
+// Datos ThingSpeak
+async function fetchThingSpeakFiltered(){
+  const url=`https://api.thingspeak.com/channels/${TS_CHANNEL_ID}/feeds.json?api_key=${TS_READ_API_KEY}&results=${TS_RESULTS}`;
+  const r=await fetch(url,{cache:"no-store"});
+  if(!r.ok) throw new Error("ThingSpeak error");
+  const data=await r.json(), feeds=data.feeds||[];
+  if(!feeds.length) throw new Error("Sin datos");
+  let descartes=0; const cleaned=[];
+  for(const f of feeds){
+    const la=parseFloat((f.field6??"").toString().replace(",", "."));
+    const lo=parseFloat((f.field7??"").toString().replace(",", "."));
+    if(Number.isNaN(la)||Number.isNaN(lo)){ descartes++; continue; }
+    const p={ lat:la, lng:lo, created_at:f.created_at };
+    const dBase=haversineMeters(BASE,p);
+    if(dBase>MAX_DIST_FROM_BASE_M){ descartes++; continue; }
+    if(cleaned.length){
+      const prev=cleaned[cleaned.length-1];
+      const dJump=haversineMeters(prev,p);
+      if(dJump>MAX_JUMP_M){ descartes++; continue; }
+    }
+    cleaned.push(p);
+  }
+  const limited=cleaned.slice(-MAX_POINTS);
+  const last=limited[limited.length-1]||cleaned[cleaned.length-1];
+  if(!last) throw new Error("Sin puntos válidos tras filtros");
+  return { destino:last, path:limited.map(({lat,lng})=>({lat,lng})), descartes };
+}
+
+async function actualizar(manual=false){
+  try{
+    if(manual) setStatus("Actualizando…");
+    const { destino, path, descartes } = await fetchThingSpeakFiltered();
+
+    const latOk=Number.isFinite(destino.lat)&&Math.abs(destino.lat)<=90;
+    const lngOk=Number.isFinite(destino.lng)&&Math.abs(destino.lng)<=180;
+    if(!latOk||!lngOk){ setStatus("Coordenadas inválidas (descartadas)", true); return; }
+
+    // Movimiento
+    let moved=false; let prev=null;
+    if(path && path.length>=2){
+      prev=path[path.length-2];
+      const d=haversineMeters(prev,destino);
+      const prevAng=bearingFromTo(BASE,prev);
+      const ang=bearingFromTo(BASE,destino);
+      const dAng=Math.abs(((ang - prevAng + 540) % 360) - 180);
+      moved=(d>=MOVE_MIN_DIST_M)||(dAng>=MOVE_MIN_DEG);
+    }
+    const now=Date.now();
+    const lastAgeMs=now - new Date(destino.created_at).getTime();
+    if(moved) lastMoveAt=now;
+
+    ultimoDestinoValido=destino;
+
+    markerDestino.setPosition(destino);
+    polyLinea.setPath([BASE, destino]);
+
+    polyTrayecto.setPath(path);
+    polyTrayecto.setVisible(showPathOn);
+
+    clearPointLabels();
+    if(showPathOn){
+      path.forEach((p,i)=>{
+        const marker=new google.maps.Marker({ position:p, map:gmap, icon:{path:google.maps.SymbolPath.CIRCLE, scale:0, labelOrigin:new google.maps.Point(15,0)},
+          label:{ text:String(i+1), color:"#000", fontSize:"12px", fontWeight:"700" } });
+        pointLabels.push(marker);
+      });
+    }
+
+    const angNow=bearingFromTo(BASE,destino);
+    let sectorNombre="Sin sector"; let sectorTipo="—";
+    px_sectorPolys.forEach(({poly,def})=>{
+      const dentro = def.desde<=def.hasta ? (def.desde<=angNow && angNow<=def.hasta) : (angNow>=def.desde || angNow<=def.hasta);
+      poly.setOptions({ strokeWeight: dentro?3:1, fillOpacity: dentro? def.op+0.15: def.op });
+      if(dentro){ sectorNombre = def.nombre || def.tipo; sectorTipo = def.tipo; }
+    });
+
+    const inAptaNow=(sectorTipo==="Apta");
+
+    if(lastAgeMs<=STALE_MS){
+      if(lastInApta===null){ lastInApta=inAptaNow; }
+      else if(inAptaNow!==lastInApta){
+        if(now-lastSentAt>=MIN_WRITE_MS){ sendField3(inAptaNow?1:0); }
+        lastInApta=inAptaNow;
+      }
+    }
+
+    if(inAptaNow && (now-lastMoveAt>=STATIC_MS)){
+      if(lastSentValue!==0 && (now-lastSentAt>=MIN_WRITE_MS)){ sendField3(0); }
+    }
+
+    if(autoFrame){
+      const b=new google.maps.LatLngBounds(); b.extend(BASE); b.extend(destino); gmap.fitBounds(b);
+    }
+
+    document.getElementById("px_lat").textContent = destino.lat.toFixed(6);
+    document.getElementById("px_lng").textContent = destino.lng.toFixed(6);
+    document.getElementById("px_hora").textContent = new Date(destino.created_at).toLocaleString();
+    document.getElementById("px_bearing").textContent = angNow.toFixed(1) + "°";
+    document.getElementById("px_sector").textContent = sectorNombre;
+    document.getElementById("px_tipo").textContent = sectorTipo;
+
+    let dirText = "Estática";
+    if(!path || path.length===0) dirText="Sin datos";
+    else if(lastAgeMs>STALE_MS) dirText="Sin datos recientes";
+    else if(moved) dirText="En movimiento";
+    else if(now-lastMoveAt>=STATIC_MS) dirText="Estática (sin actualización)";
+    else dirText="Estática";
+    document.getElementById("px_dir").textContent = dirText;
+
+    document.getElementById("px_status").textContent = descartes ? `OK (descartados ${descartes})` : "OK";
+
+  }catch(e){
+    setStatus("Error: " + (e.message||e), true);
+    console.error(e);
+    if(ultimoDestinoValido){ markerDestino.setPosition(ultimoDestinoValido); polyLinea.setPath([BASE, ultimoDestinoValido]); }
+  }
+}
+
+</script>
+
+<!-- API de Google Maps con callback propio para no interferir -->
+<script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAzwBPdz_8GpVtODkJafjbc_yBq_Ul5tSU&callback=initPxMap"></script>
+
+
+<!-- ========== BLOQUE ADICIONAL: PUMP dB (embebido con lógica completa) ========== -->
+<section id="pumpdb-embed" style="margin:24px auto; max-width:1200px; padding:0 16px;">
+  <h2 style="text-align:center; margin:12px 0; font-family:system-ui; font-weight:800;">🔊 PUMP dB (módulo embebido)</h2>
+  <p style="text-align:center; margin:-6px 0 12px; opacity:.8;">gauge + gráfico + WhatsApp + Relay.</p>
+  <iframe
+    title="PUMP dB"
+    style="width:100%; height:1600px; border:0; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.25); background:#121212;"
+    loading="lazy"
+    referrerpolicy="no-referrer"
+    sandbox="allow-scripts allow-same-origin allow-popups"
+    srcdoc="&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;es&quot;&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;UTF-8&quot;/&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot;/&gt;
+&lt;title&gt;PUMP dB&lt;/title&gt;
+&lt;script src=&quot;https://cdn.jsdelivr.net/npm/chart.js&quot;&gt;&lt;/script&gt;
+&lt;style&gt;
+  /* ======== SPLASH ======== */
+  #splash { display:none !important; } /* Ocultar splash en versión embebida */
+  .splash-screen { text-align: center; color: #fff; background-color: rgba(0,0,0,0.6); padding: 40px; border-radius: 15px;
+    box-shadow: 0 4px 8px rgba(0,0,0,.3); animation: fadeIn 1s ease-in-out; }
+  @keyframes fadeIn { from{opacity:0; transform:scale(.98)} to{opacity:1; transform:scale(1)} }
+
+  /* ======== APP ======== */
+  :root{ --bg:#121212; --card:#1e1e1e; --ink:#eaeaea; --muted:#b8b8b8; --cyan:#00e5ff; --good:#00e676; --bad:#ff1744; --accent:#77c589; --warn:#ffc107; }
+  body{background:var(--bg);color:var(--ink);font-family:&#x27;Segoe UI&#x27;,system-ui,Arial,sans-serif;margin:0}
+  .page{max-width:1100px;margin:24px auto;padding:0 16px}
+  .title{font-size:24px;font-weight:700;color:var(--cyan);text-align:center;margin:0 0 18px;text-shadow:0 0 6px #00e5ff44}
+  .top-grid{display:grid;gap:20px;grid-template-columns: 1fr 1fr;align-items:start}
+  @media (max-width: 900px){ .top-grid{grid-template-columns: 1fr} }
+  .card{background:var(--card);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  .card.pad{padding:18px 18px}
+  .panel h3{margin:0 0 14px;font-size:18px;color:#8be9fd}
+  .rows{display:flex;flex-direction:column;gap:12px}
+  .row{display:grid;gap:12px;align-items:center;grid-template-columns: 1.3fr 1fr auto}
+  .row.compact{grid-template-columns: 1.5fr auto 1fr}
+  label{font-weight:700}
+  .suffix{color:var(--muted)}
+  .input{background:#0f0f0f;border:1px solid #2e2e2e;border-radius:12px;color:var(--ink);padding:12px 10px;font-size:16px;width:100%;text-align:center}
+  .check{transform:scale(1.15)}
+  .actions{display:flex;gap:12px;align-items:center;margin-top:6px;flex-wrap:wrap}
+  .btn{background:var(--accent);border:none;color:#072a1f;font-weight:800;padding:10px 16px;border-radius:12px;cursor:pointer}
+  .btn.test{background:#00e5ff;color:#00303a}
+  .btn.ghost{background:#7b8b8f;color:#eaf6ff}
+  .msg{font-size:12px}.ok{color:#69f0ae}.err{color:#ff5252}
+  .info-block{margin-top:16px;padding:10px 12px;border-radius:12px;background:#151515;color:#cfd8dc;font-size:14px;display:grid;gap:4px}
+  .info-block strong{color:#e5f5ff}
+  .info-sub{font-size:13px;color:#9ee6ff;margin-left:18px}
+  .gauge-card{padding:16px}
+  #gaugeContainer{width:min(520px,100%);margin:6px auto 0;position:relative}
+  #gaugeCanvas{width:100%;height:auto;display:block;aspect-ratio:1/1}
+  .gauge-title{font-size:20px;font-weight:700;color:var(--cyan);text-align:center;margin:4px 0 8px}
+  #centerValue{ position:absolute;left:50%;top:62%;transform:translate(-50%,-50%);
+    font-size:36px;font-weight:900;color:#eaffff;text-shadow:0 0 10px #00e5ff77;padding:6px 12px;border-radius:12px }
+  .chart-card{margin-top:20px;padding:18px}
+  #chartContainer{width:100%;max-width:1000px;margin:0 auto}
+
+  /* ===== Toasts ===== */
+  .toast-container{ position:fixed; right:16px; top:16px; z-index:99999; display:flex; flex-direction:column; gap:10px; pointer-events:none; }
+  .toast{ min-width:260px; max-width:360px; padding:12px 14px; border-radius:12px; background:#222; color:#fff; box-shadow:0 12px 28px rgba(0,0,0,.4);
+    display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:start; opacity:0; transform:translateY(-6px); animation:toast-in .2s ease forwards; pointer-events:auto; }
+  .toast .t-title{font-weight:800; margin:0 0 4px; font-size:14px}
+  .toast .t-msg{font-size:13px; color:#ddd}
+  .toast button{ background:transparent; border:0; color:#fff; font-weight:900; cursor:pointer; opacity:.9; }
+  .toast.info{border-left:4px solid var(--cyan)} .toast.ok{border-left:4px solid var(--good)} .toast.warn{border-left:4px solid var(--warn)} .toast.err{border-left:4px solid var(--bad)}
+  @keyframes toast-in{to{opacity:1; transform:translateY(0)}} @keyframes toast-out{to{opacity:0; transform:translateY(-6px)}}
+
+  /* ===== Botones tipo &quot;píldora&quot; ===== */
+  .pill{ display:inline-flex; align-items:center; gap:.5rem; background:#0f2026; color:#dff7ff; padding:.55rem .9rem; border-radius:12px; border:1px solid #27444d; }
+  .pill input{ transform:scale(1.1); }
+  .pill .icon{ font-size:1.05rem; }
+  body.lock-scroll{ overflow:hidden; }
+
+  /* 🔴 Halo / pulso */
+  #gaugeContainer.alert-pulse{ border-radius: 50%; animation: pulseGlow 0.9s ease-in-out infinite; }
+  @keyframes pulseGlow{ 0%{box-shadow:0 0 0 0 rgba(255,23,68,0)} 40%{box-shadow:0 0 28px 10px rgba(255,23,68,.55)} 60%{box-shadow:0 0 40px 14px rgba(255,23,68,.7)} 100%{box-shadow:0 0 0 0 rgba(255,23,68,0)} }
+  @media (prefers-reduced-motion: reduce){ #gaugeContainer.alert-pulse{ animation:none; box-shadow:0 0 40px 12px rgba(255,23,68,.65); } }
+  #centerValue.alert-pulse{ animation:textPulse 1s ease-in-out infinite; }
+  @keyframes textPulse{ 0%,100%{transform:translate(-50%,-50%) scale(1); color:#ffeaea} 50%{transform:translate(-50%,-50%) scale(1.18); color:#ff5c8d} }
+
+  /* ===== Wake Lock ===== */
+  #btnWakeLock { background:#0f2026; color:#dff7ff; border:1px solid #27444d; border-radius:12px; padding:.55rem .9rem; font-weight:700; }
+  #btnWakeLock:hover { background:#152f38; }
+
+  /* ===== Relay ===== */
+  #btnRelay.on{ background: var(--good); color:#003a1f }
+  #btnRelay.off{ background:#f00909; color:#fff6ea }
+  .relay-block{ position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); text-align:center; width: 100%; }
+  .relay-block .actions{ justify-content:center; margin:0 }
+  .relay-block .msg{ margin-top:2px }
+  .relay-block .info-sub{ margin-top:2px; margin-left:0 }
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body class=&quot;lock-scroll&quot;&gt;
+
+  &lt;!-- ======= SPLASH ======= --&gt;
+  &lt;div id=&quot;splash&quot; aria-label=&quot;Pantalla de bienvenida&quot;&gt;&lt;/div&gt;
+
+  &lt;div class=&quot;toast-container&quot; id=&quot;toasts&quot;&gt;&lt;/div&gt;
+
+  &lt;!-- ======= APP ======= --&gt;
+  &lt;div id=&quot;app&quot; style=&quot;visibility:visible;&quot;&gt;
+    &lt;div class=&quot;page&quot;&gt;
+      &lt;h1 class=&quot;title&quot;&gt;Medidor de Decibelios&lt;/h1&gt;
+
+      &lt;div class=&quot;top-grid&quot;&gt;
+        &lt;!-- Panel --&gt;
+        &lt;div class=&quot;card pad panel&quot;&gt;
+          &lt;h3&gt;Configracion de Alertas de nivel sonoro (dB) y WhatsApp&lt;/h3&gt;
+          &lt;div class=&quot;rows&quot;&gt;
+            &lt;div class=&quot;row&quot;&gt;&lt;label&gt;🔉 Alerta BAJA &amp;lt;&lt;/label&gt;&lt;input id=&quot;alertLow&quot; class=&quot;input&quot; type=&quot;number&quot; min=&quot;0&quot; step=&quot;1&quot;/&gt;&lt;span class=&quot;suffix&quot;&gt;dB&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;row&quot;&gt;&lt;label&gt;🔊 Alerta ALTA &amp;gt;&lt;/label&gt;&lt;input id=&quot;alertHigh&quot; class=&quot;input&quot; type=&quot;number&quot; min=&quot;1&quot; step=&quot;1&quot;/&gt;&lt;span class=&quot;suffix&quot;&gt;dB&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;row&quot;&gt;&lt;label&gt;📈 Máx dB (escala gauge)&lt;/label&gt;&lt;input id=&quot;maxDb&quot; class=&quot;input&quot; type=&quot;number&quot; min=&quot;40&quot; step=&quot;5&quot;/&gt;&lt;span class=&quot;suffix&quot;&gt;dB&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;row compact&quot;&gt;&lt;label&gt;📏 Auto-escala gráfico&lt;/label&gt;&lt;input id=&quot;autoScale&quot; class=&quot;check&quot; type=&quot;checkbox&quot;/&gt;&lt;span&gt;&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;row compact&quot;&gt;&lt;label&gt;✅ Activar WhatsApp&lt;/label&gt;&lt;input id=&quot;waEnabled&quot; class=&quot;check&quot; type=&quot;checkbox&quot;/&gt;&lt;span&gt;&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;row&quot;&gt;&lt;label&gt;⏱️ Intervalo (min)&lt;/label&gt;&lt;input id=&quot;intervalMin&quot; class=&quot;input&quot; type=&quot;number&quot; min=&quot;1&quot; step=&quot;1&quot;/&gt;&lt;span class=&quot;suffix&quot;&gt;min&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;row compact&quot;&gt;&lt;label&gt;🌀 Enviar cada lectura fuera de rango&lt;/label&gt;&lt;input id=&quot;everyOut&quot; class=&quot;check&quot; type=&quot;checkbox&quot;/&gt;&lt;span&gt;&lt;/span&gt;&lt;/div&gt;
+
+            &lt;div class=&quot;actions&quot;&gt;
+              &lt;button class=&quot;btn&quot; id=&quot;btnSave&quot;&gt;Guardar&lt;/button&gt;
+              &lt;button class=&quot;btn test&quot; id=&quot;btnTestWA&quot;&gt;Probar WhatsApp&lt;/button&gt;
+              &lt;span class=&quot;msg&quot; id=&quot;saveMsg&quot;&gt;&lt;/span&gt;
+            &lt;/div&gt;
+
+            &lt;div class=&quot;actions&quot;&gt;
+              &lt;label class=&quot;pill&quot; title=&quot;Seguir leyendo y guardando historial cuando la app esté en segundo plano&quot;&gt;
+                &lt;input id=&quot;bgFollow&quot; type=&quot;checkbox&quot;&gt;&lt;span class=&quot;icon&quot;&gt;🔄&lt;/span&gt; Seguir segundo plano
+              &lt;/label&gt;
+              &lt;button class=&quot;btn ghost&quot; id=&quot;btnWakeLock&quot;&gt;🛡️ Mantener pantalla activa&lt;/button&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+
+          &lt;div class=&quot;info-block&quot;&gt;
+            &lt;div&gt;📊 &lt;strong&gt;Última lectura:&lt;/strong&gt; &lt;span id=&quot;lastReading&quot;&gt;--&lt;/span&gt;&lt;/div&gt;
+            &lt;div&gt;📨 &lt;strong&gt;Último WhatsApp:&lt;/strong&gt; &lt;span id=&quot;lastWhats&quot;&gt;--&lt;/span&gt;
+              &lt;div id=&quot;lastWhatsMsg&quot; class=&quot;info-sub&quot;&gt;--&lt;/div&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+
+        &lt;!-- Gauge --&gt;
+        &lt;div class=&quot;card gauge-card&quot;&gt;
+          &lt;div class=&quot;gauge-title&quot;&gt;Nivel Sonoro (dB)&lt;/div&gt;
+          &lt;div id=&quot;gaugeContainer&quot;&gt;
+            &lt;canvas id=&quot;gaugeCanvas&quot;&gt;&lt;/canvas&gt;
+            &lt;div id=&quot;centerValue&quot;&gt;0&lt;/div&gt;
+
+            &lt;div class=&quot;relay-block&quot;&gt;
+              &lt;div class=&quot;actions&quot;&gt;
+                &lt;button id=&quot;btnRelay&quot; class=&quot;btn ghost off&quot; aria-pressed=&quot;false&quot; type=&quot;button&quot;&gt;🔌 PUMP: --&lt;/button&gt;
+              &lt;/div&gt;
+              &lt;div class=&quot;msg&quot; id=&quot;relayMsg&quot;&gt;&lt;/div&gt;
+              &lt;div id=&quot;relayLastTime&quot; class=&quot;info-sub&quot;&gt;Último cambio: --&lt;/div&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+
+      &lt;!-- Gráfica --&gt;
+      &lt;div class=&quot;card chart-card&quot;&gt;
+        &lt;div id=&quot;chartContainer&quot;&gt;&lt;canvas id=&quot;chart&quot;&gt;&lt;/canvas&gt;&lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+
+&lt;script&gt;
+
+/* ====== CONTROL SPLASH ====== */
+(function(){
+  const splash = document.getElementById(&#x27;splash&#x27;);
+  const app = document.getElementById(&#x27;app&#x27;);
+  // En embebido, mostrar directamente
+  try{ splash &amp;&amp; splash.classList.add(&#x27;hidden&#x27;); if(app) app.style.visibility=&#x27;visible&#x27;; document.body.classList.remove(&#x27;lock-scroll&#x27;); }catch(e){}
+})();
+
+/* ===== Util ===== */
+function nowStr(){ try { return new Date().toLocaleString(&#x27;es-MX&#x27;, { hour12:true }); } catch { return new Date().toLocaleString(); } }
+const clamp = (v,min,max)=&gt;Math.min(Math.max(v,min),max);
+
+/* ===== Toasts ===== */
+const TOAST_TTL = 3800;
+function toast(title, msg=&#x27;&#x27;, kind=&#x27;info&#x27;){
+  const cont = document.getElementById(&#x27;toasts&#x27;);
+  const el = document.createElement(&#x27;div&#x27;);
+  el.className = `toast ${kind}`;
+  el.innerHTML = `&lt;div style=&quot;font-size:18px;line-height:1&quot;&gt;🔔&lt;/div&gt;&lt;div&gt;&lt;div class=&quot;t-title&quot;&gt;${title}&lt;/div&gt;&lt;div class=&quot;t-msg&quot;&gt;${msg}&lt;/div&gt;&lt;/div&gt;&lt;button aria-label=&quot;cerrar&quot;&gt;✕&lt;/button&gt;`;
+  const close = ()=&gt;{ el.style.animation=&#x27;toast-out .15s ease forwards&#x27;; setTimeout(()=&gt;el.remove(), 150); };
+  el.querySelector(&#x27;button&#x27;).onclick = close;
+  cont.appendChild(el);
+  setTimeout(close, TOAST_TTL);
+}
+const toastUser = (icon, title, msg=&#x27;&#x27;, kind=&#x27;ok&#x27;) =&gt; toast(`${icon} ${title}`, msg, kind);
+
+/* ===== Notificaciones nativas ===== */
+function requestNativeNotifPermission(){ if(&#x27;Notification&#x27; in window &amp;&amp; Notification.permission===&#x27;default&#x27;){ Notification.requestPermission().catch(()=&gt;{}); } }
+function notifyNative(title, body){
+  try{ if(document.visibilityState===&#x27;hidden&#x27; &amp;&amp; &#x27;Notification&#x27; in window &amp;&amp; Notification.permission===&#x27;granted&#x27;){ new Notification(title, { body }); } }catch(e){}
+}
+
+/* ===== Config persistente ===== */
+const LS_KEY = &#x27;alertasWhats_dB_V1&#x27;;
+const defaults = { low:30, high:85, waEnabled:false, intervalMin:5, max:120, everyOut:false, autoScale:true, bgFollow:true, wakeWanted:false };
+
+const ui = {
+  low: alertLow, high: alertHigh, maxDb: maxDb, autoScale: autoScale, waEnabled: waEnabled,
+  intervalMin: intervalMin, everyOut: everyOut, btnSave: btnSave, btnTestWA: btnTestWA,
+  saveMsg: saveMsg, lastReading: lastReading, lastWhats: lastWhats, lastWhatsMsg: lastWhatsMsg,
+  bgFollow: document.getElementById(&#x27;bgFollow&#x27;), btnWakeLock: document.getElementById(&#x27;btnWakeLock&#x27;)
+};
+function loadCfg(){ try{ return {...defaults, ...(JSON.parse(localStorage.getItem(LS_KEY))||{})}; }catch(e){ return {...defaults}; } }
+function saveCfg(c){ localStorage.setItem(LS_KEY, JSON.stringify(c)); }
+let cfg = loadCfg();
+ui.low.value = cfg.low; ui.high.value = cfg.high; ui.maxDb.value = cfg.max;
+ui.autoScale.checked = cfg.autoScale; ui.waEnabled.checked = cfg.waEnabled;
+ui.intervalMin.value = cfg.intervalMin; ui.everyOut.checked = cfg.everyOut;
+ui.bgFollow.checked = cfg.bgFollow;
+
+function setStatus(msg, ok=true){ ui.saveMsg.textContent = msg; ui.saveMsg.className = &#x27;msg &#x27; + (ok ? &#x27;ok&#x27; : &#x27;err&#x27;); }
+
+/* ===== Persistencia del ÚLTIMO WhatsApp ===== */
+const WA_KEY = &quot;last_whatsapp_v1&quot;;
+function loadLastWhats(){
+  try{
+    const j = JSON.parse(localStorage.getItem(WA_KEY));
+    if(j){
+      lastWhats.textContent = j.time || &quot;--&quot;;
+      lastWhatsMsg.textContent = j.msg || &quot;--&quot;;
+    }
+  }catch(e){}
+}
+function saveLastWhats(time, msg){
+  try{
+    localStorage.setItem(WA_KEY, JSON.stringify({ time, msg }));
+  }catch(e){}
+  lastWhats.textContent = time;
+  lastWhatsMsg.textContent = msg;
+}
+// Cargar al iniciar
+loadLastWhats();
+
+/* ===== TOASTS en controles ===== */
+ui.autoScale.addEventListener(&#x27;change&#x27;, ()=&gt;{ const on = ui.autoScale.checked; toastUser(&#x27;📏&#x27;,&#x27;Auto-escala gráfico&#x27;, on?&#x27;Activada&#x27;:&#x27;Desactivada&#x27;, on?&#x27;ok&#x27;:&#x27;warn&#x27;); });
+ui.waEnabled.addEventListener(&#x27;change&#x27;, ()=&gt;{ const on = ui.waEnabled.checked; toastUser(&#x27;✅&#x27;,&#x27;Activar WhatsApp&#x27;, on?&#x27;Activado&#x27;:&#x27;Desactivado&#x27;, on?&#x27;ok&#x27;:&#x27;warn&#x27;); });
+ui.everyOut.addEventListener(&#x27;change&#x27;, ()=&gt;{ const on = ui.everyOut.checked; toastUser(&#x27;🌀&#x27;,&#x27;Enviar cada lectura fuera de rango&#x27;, on?&#x27;Activado&#x27;:&#x27;Desactivado&#x27;, on?&#x27;ok&#x27;:&#x27;warn&#x27;); });
+ui.bgFollow.addEventListener(&#x27;change&#x27;, ()=&gt;{ cfg.bgFollow = ui.bgFollow.checked; saveCfg(cfg); applyBackgroundPolicy(); toastUser(&#x27;🔄&#x27;,&#x27;Segundo plano&#x27;, cfg.bgFollow?&#x27;Seguir segundo plano: ON&#x27;:&#x27;OFF&#x27;, cfg.bgFollow?&#x27;ok&#x27;:&#x27;warn&#x27;); });
+
+ui.btnSave.onclick = ()=&gt;{
+  const low = parseFloat(ui.low.value), high = parseFloat(ui.high.value);
+  const maxDb = Math.max(40, parseFloat(ui.maxDb.value || defaults.max));
+  const intervalMin = Math.max(1, parseInt(ui.intervalMin.value||&#x27;1&#x27;,10));
+  const autoScale = ui.autoScale.checked;
+  if(!(low&gt;=0 &amp;&amp; high&gt;low)){ setStatus(&#x27;Revisa umbrales: BAJA &lt; ALTA&#x27;, false); toastUser(&#x27;💾&#x27;,&#x27;Guardar&#x27;,&#x27;Revisa umbrales: BAJA &lt; ALTA&#x27;,&#x27;warn&#x27;); return; }
+  if(high&gt;maxDb){ setStatus(&#x27;ALTA debe ser ≤ Máx dB&#x27;, false); toastUser(&#x27;💾&#x27;,&#x27;Guardar&#x27;,&#x27;ALTA debe ser ≤ Máx dB&#x27;,&#x27;warn&#x27;); return; }
+  cfg = { ...cfg, low, high, waEnabled: ui.waEnabled.checked, intervalMin, max: maxDb, everyOut: ui.everyOut.checked, autoScale };
+  saveCfg(cfg);
+  if(!cfg.autoScale){ chart.options.scales.y.min = 0; chart.options.scales.y.max = cfg.max; } else { applyYAxisAuto(); }
+  chart.update(); drawGauge(displayedValue);
+  setStatus(&#x27;Guardado ✔&#x27;, true);
+  toastUser(&#x27;💾&#x27;,&#x27;Configuración&#x27;,&#x27;OK&#x27;,&#x27;ok&#x27;);
+  setWorkerInterval(15000);
+};
+
+/* ===== Gauge ===== */
+const canvas = document.getElementById(&#x27;gaugeCanvas&#x27;);
+const ctx2d = canvas.getContext(&#x27;2d&#x27;);
+const centerValueEl = document.getElementById(&#x27;centerValue&#x27;);
+function fitCanvas(){ const r = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio||1; canvas.width=r.width*dpr; canvas.height=r.height*dpr; ctx2d.setTransform(dpr,0,0,dpr,0,0); }
+const ro = new ResizeObserver(()=&gt;{ fitCanvas(); drawGauge(displayedValue); }); ro.observe(canvas);
+const startAngle=135, totalAngle=270; let value=0, displayedValue=value;
+const colorGreen=&#x27;#00e676&#x27;, colorRed=&#x27;#ff1744&#x27;; function d2r(d){ return (Math.PI/180)*d; }
+function zoneColor(v){ return (v&lt;cfg.low||v&gt;cfg.high) ? colorRed : colorGreen; }
+function niceStep(max){ if(max&lt;=60) return 5; if(max&lt;=120) return 10; if(max&lt;=200) return 20; const raw=Math.ceil(max/12); return Math.ceil(raw/5)*5; }
+function drawGauge(val){
+  const w=canvas.clientWidth,h=canvas.clientHeight,cx=w/2,cy=h/2,r=Math.min(w,h)/2-24,MAX=cfg.max; ctx2d.clearRect(0,0,w,h);
+  [{s:0,e:cfg.low,c:colorRed},{s:cfg.low,e:cfg.high,c:colorGreen},{s:cfg.high,e:MAX,c:colorRed}].forEach(z=&gt;{
+    const s=d2r(startAngle+(z.s/MAX)*totalAngle), e=d2r(startAngle+(z.e/MAX)*totalAngle);
+    ctx2d.beginPath(); ctx2d.lineWidth=Math.max(14,r*0.13); ctx2d.strokeStyle=z.c; ctx2d.arc(cx,cy,r,s,e); ctx2d.stroke();
+  });
+  ctx2d.lineWidth=2; ctx2d.font=&quot;12px Segoe UI&quot;; ctx2d.fillStyle=&quot;#ccc&quot;;
+  for(let i=0;i&lt;=MAX;i+=niceStep(MAX)){
+    const a=d2r(startAngle+(i/MAX)*totalAngle), x1=cx+Math.cos(a)*(r-8), y1=cy+Math.sin(a)*(r-8), x2=cx+Math.cos(a)*(r-24), y2=cy+Math.sin(a)*(r-24);
+    ctx2d.beginPath(); ctx2d.moveTo(x1,y1); ctx2d.lineTo(x2,y2); ctx2d.strokeStyle=&quot;#fff&quot;; ctx2d.stroke();
+    const xt=cx+Math.cos(a)*(r-40), yt=cy+Math.sin(a)*(r-40); const wtxt=ctx2d.measureText(i.toString()).width; ctx2d.fillText(i.toString(), xt-wtxt/2, yt+4);
+  }
+  const clamped=clamp(val,0,MAX), a=d2r(startAngle+(clamped/MAX)*totalAngle), L=r-40;
+  ctx2d.beginPath(); ctx2d.moveTo(cx,cy); ctx2d.lineTo(cx+Math.cos(a)*L, cy+Math.sin(a)*L); ctx2d.strokeStyle=&quot;#ffbf00&quot;; ctx2d.lineWidth=4; ctx2d.shadowColor=&quot;#ffbf00aa&quot;; ctx2d.shadowBlur=8; ctx2d.stroke(); ctx2d.shadowBlur=0;
+  ctx2d.beginPath(); ctx2d.arc(cx,cy,16,0,2*Math.PI); ctx2d.fillStyle=&quot;#ffd740&quot;; ctx2d.fill(); ctx2d.lineWidth=3; ctx2d.strokeStyle=&quot;#555&quot;; ctx2d.stroke();
+  centerValueEl.textContent=clamp(displayedValue,0,MAX).toFixed(0);
+  centerValueEl.style.textShadow=`0 0 10px ${zoneColor(displayedValue)}88`;
+  const cont = document.getElementById(&#x27;gaugeContainer&#x27;);
+  if(displayedValue &lt; cfg.low || displayedValue &gt; cfg.high){
+    cont.classList.add(&#x27;alert-pulse&#x27;); centerValueEl.classList.add(&#x27;alert-pulse&#x27;);
+  } else {
+    cont.classList.remove(&#x27;alert-pulse&#x27;); centerValueEl.classList.remove(&#x27;alert-pulse&#x27;);
+  }
+}
+function animateNeedle(toVal,duration=350){
+  toVal=clamp(toVal,0,cfg.max); const from=displayedValue, start=performance.now();
+  const step=(t)=&gt;{ const p=Math.min(1,(t-start)/duration), ease=p&lt;0.5?2*p*p:-1+(4-2*p)*p; displayedValue=from+(toVal-from)*ease; drawGauge(displayedValue); if(p&lt;1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+fitCanvas(); drawGauge(value);
+
+/* ===== WhatsApp ===== */
+const WA_PHONE = &#x27;+5212311560234&#x27;, WA_APIKEY = &#x27;4036182&#x27;;
+async function sendWhatsApp(text){
+  const url = &quot;https://api.callmebot.com/whatsapp.php?phone=&quot;+encodeURIComponent(WA_PHONE)+&quot;&amp;text=&quot;+encodeURIComponent(text)+&quot;&amp;apikey=&quot;+encodeURIComponent(WA_APIKEY);
+  try{ const ac=new AbortController(); const t=setTimeout(()=&gt;ac.abort(),8000); await fetch(url,{mode:&#x27;no-cors&#x27;,signal:ac.signal}); clearTimeout(t); setStatus(&#x27;WhatsApp enviado.&#x27;, true); return true; }catch(e){}
+  try{ await new Promise((res,rej)=&gt;{ const img=new Image(); img.onload=()=&gt;res(); img.onerror=()=&gt;rej(new Error(&#x27;img err&#x27;)); img.src=url+&#x27;&amp;cb=&#x27;+Date.now(); }); setStatus(&#x27;WhatsApp enviado (img).&#x27;,true); return true; }catch(e){ setStatus(&#x27;No se pudo enviar WhatsApp.&#x27;,false); return false; }
+}
+btnTestWA.onclick = async ()=&gt;{
+  toastUser(&#x27;📲&#x27;,&#x27;Probar WhatsApp&#x27;,&#x27;Enviando…&#x27;,&#x27;info&#x27;);
+  if(!waEnabled.checked){ setStatus(&#x27;Activa WhatsApp antes de probar.&#x27;, false); toastUser(&#x27;📲&#x27;,&#x27;Probar&#x27;,&#x27;Actívalo antes de probar.&#x27;,&#x27;warn&#x27;); return; }
+  const msg=&#x27;🔧 Prueba de envío desde el dashboard.&#x27;;
+  if(await sendWhatsApp(msg)){
+    saveLastWhats(nowStr(), msg); // &lt;-- persistente
+    toastUser(&#x27;📲&#x27;,&#x27;Prueba&#x27;,&#x27;Mensaje enviado.&#x27;,&#x27;ok&#x27;);
+  } else {
+    toastUser(&#x27;📲&#x27;,&#x27;Prueba&#x27;,&#x27;Falló.&#x27;,&#x27;err&#x27;);
+  }
+};
+
+/* ===== Chart ===== */
+const chart = new Chart(document.getElementById(&#x27;chart&#x27;).getContext(&#x27;2d&#x27;),{
+  type:&#x27;line&#x27;,
+  data:{ labels:[], datasets:[{ label:&#x27;dB&#x27;, data:[], borderColor:&#x27;#00bcd4&#x27;, backgroundColor:&#x27;rgba(0,188,212,.2)&#x27;, tension:.3, fill:true, pointRadius:3.5, pointBackgroundColor:&#x27;#00e5ff&#x27;, pointHoverRadius:6 }]},
+  options:{ responsive:true, animation:false, interaction:{mode:&#x27;nearest&#x27;,axis:&#x27;x&#x27;,intersect:false},
+    onClick:(e,els)=&gt;{ if(els.length){ const i=els[0].index; value=chart.data.datasets[0].data[i]; animateNeedle(value); maybeAlert(value); } },
+    layout:{padding:{left:4,right:10,top:8,bottom:6}},
+    scales:{ x:{ticks:{color:&#x27;#ccc&#x27;}}, y:{min:0,max:defaults.max,ticks:{color:&#x27;#ccc&#x27;}} },
+    plugins:{
+      legend:{labels:{color:&#x27;#ccc&#x27;}},
+      tooltip:{
+        backgroundColor:&#x27;#222&#x27;,
+        titleColor:&#x27;#00e5ff&#x27;,
+        bodyColor:&#x27;#fff&#x27;,
+        titleFont:{weight:&#x27;bold&#x27;},
+        callbacks:{
+          // Título en dos líneas: Fecha y Hora (desde history[i].t)
+          title(items){
+            const i = items?.[0]?.dataIndex ?? 0;
+            const iso = history?.[i]?.t;
+            if(iso){
+              const d = new Date(iso);
+              const fecha = d.toLocaleDateString(&#x27;es-MX&#x27;,{year:&#x27;2-digit&#x27;,month:&#x27;2-digit&#x27;,day:&#x27;2-digit&#x27;});
+              const hora  = d.toLocaleTimeString(&#x27;es-MX&#x27;,{hour12:true});
+              return [`Fecha: ${fecha}`, `Hora: ${hora}`];
+            }
+            return items?.[0]?.label ?? &#x27;&#x27;;
+          },
+          label(c){
+            const val = (typeof c.formattedValue===&#x27;string&#x27;) ? c.formattedValue : (c.parsed?.y ?? c.raw);
+            return `Valor: ${val} dB`;
+          }
+        }
+      }
+    }
+  }
+});
+
+function applyYAxisAuto(){
+  const arr=chart.data.datasets[0].data;
+  if(!cfg.autoScale||arr.length===0){ chart.options.scales.y.min=0; chart.options.scales.y.max=cfg.max; return; }
+  let min=Math.min(...arr), max=Math.max(...arr); if(min===max){ min-=1; max+=1; }
+  const pad=Math.max((max-min)*0.1,2); min=Math.max(0, Math.floor(min-pad)); max=Math.min(cfg.max, Math.ceil(max+pad)); if(max&lt;=min) max=min+2;
+  chart.options.scales.y.min=min; chart.options.scales.y.max=max;
+}
+
+/* ===== HISTORIAL PERSISTENTE ===== */
+const HISTORY_KEY=&quot;db_history_v1&quot;, HISTORY_MAX_POINTS=2000, BACKFILL_RESULTS=40;
+function loadHistory(){ try { return JSON.parse(localStorage.getItem(HISTORY_KEY))||[]; } catch { return []; } }
+function saveHistory(arr){ try { localStorage.setItem(HISTORY_KEY, JSON.stringify(arr.slice(-HISTORY_MAX_POINTS))); } catch(e){} }
+function mergeReadings(currentArr,newArr){ const seen=new Set(currentArr.map(p=&gt;p.id??p.t)); for(const p of newArr){ const k=p.id??p.t; if(!seen.has(k)) currentArr.push(p); } currentArr.sort((a,b)=&gt;new Date(a.t)-new Date(b.t)); return currentArr.slice(-HISTORY_MAX_POINTS); }
+
+function rebuildChartFrom(historyArr){
+  const labels=historyArr.map(p=&gt;new Date(p.t).toLocaleTimeString(&#x27;es-MX&#x27;,{hour12:true}));
+  const data=historyArr.map(p=&gt;p.v);
+  chart.data.labels=labels;
+  chart.data.datasets[0].data=data;
+  if(cfg.autoScale) applyYAxisAuto();
+  chart.update(&#x27;none&#x27;);
+  if(historyArr.length){
+    const last=historyArr[historyArr.length-1];
+    animateNeedle(last.v);
+    lastReading.textContent=new Date(last.t).toLocaleString(&#x27;es-MX&#x27;,{hour12:true});
+  }
+}
+function appendPointToChart(point){
+  chart.data.labels.push(new Date(point.t).toLocaleTimeString(&#x27;es-MX&#x27;,{hour12:true}));
+  chart.data.datasets[0].data.push(point.v);
+  if(chart.data.labels.length&gt;HISTORY_MAX_POINTS){ chart.data.labels.shift(); chart.data.datasets[0].data.shift(); }
+  if(cfg.autoScale) applyYAxisAuto();
+  chart.update(&#x27;none&#x27;);
+}
+
+let history = loadHistory(); rebuildChartFrom(history);
+
+/* ===== Alertas ===== */
+let lastSent=0, lastState=&#x27;normal&#x27;;
+function maybeAlert(v){
+  const now=Date.now(), cooldown=(cfg.intervalMin||3)*60*1000;
+  let state=(v&lt;cfg.low)?&#x27;low&#x27;:(v&gt;cfg.high)?&#x27;high&#x27;:&#x27;normal&#x27;;
+  const changed=(state!==lastState), out=(state!==&#x27;normal&#x27;);
+  const shouldSend = cfg.waEnabled &amp;&amp; out &amp;&amp; ((cfg.everyOut &amp;&amp; (now-lastSent)&gt;=cooldown) || (!cfg.everyOut &amp;&amp; changed &amp;&amp; (now-lastSent)&gt;=cooldown));
+  if(shouldSend){
+    const msg = (state===&#x27;low&#x27;)?`⚠️ Nivel SONORO BAJO: ${v} dB (umbral &lt; ${cfg.low} dB)`:`⚠️ Nivel SONORO ALTO: ${v} dB (umbral &gt; ${cfg.high} dB)`;
+    sendWhatsApp(msg).then(ok=&gt;{
+      if(ok){
+        lastSent=now;
+        saveLastWhats(nowStr(), msg); // &lt;-- persistente
+        notifyNative(&#x27;Alerta dB&#x27;, msg);
+      }
+    });
+  }
+  lastState=state;
+}
+
+/* ===== ThingSpeak + Worker ===== */
+const CHANNEL_ID=3036715, READ_APIKEY=&quot;RT6C672EH8EJ9PEU&quot;, FIELD_NUM=1;
+const WRITE_APIKEY = &quot;2S05JP4LGSWP65XV&quot;; // (para otros usos; el relay NO usará esta key)
+let lastSeenEntryId=null, lastSeenISO=null;
+let pollIntervalMs=15000, worker=null, backfillTimer=null;
+function startWorker(){
+  try{
+    const code=`
+      let cfg={channel:${CHANNEL_ID}, key:${JSON.stringify(READ_APIKEY)}, field:${FIELD_NUM}, iv:${pollIntervalMs}};
+      let timer=null;
+      async function tick(){
+        try{
+          const url=&#x27;https://api.thingspeak.com/channels/&#x27;+cfg.channel+&#x27;/fields/&#x27;+cfg.field+&#x27;/last.json?api_key=&#x27;+cfg.key+&#x27;&amp;_=&#x27;+(Date.now());
+          const r=await fetch(url,{cache:&#x27;no-store&#x27;}); const j=await r.json(); postMessage({ok:true,data:j});
+        }catch(e){ postMessage({ok:false, err:(e&amp;&amp;e.message)?e.message:&#x27;error&#x27;}); }
+      }
+      function loop(){ clearInterval(timer); timer=setInterval(tick,cfg.iv); tick(); }
+      onmessage=(ev)=&gt;{ const m=ev.data||{}; if(m.type===&#x27;config&#x27;&amp;&amp;m.iv){ cfg.iv=m.iv; loop(); } else if(m.type===&#x27;kick&#x27;){ tick(); } };
+      loop();
+    `;
+    const blob=new Blob([code],{type:&#x27;application/javascript&#x27;}); const url=URL.createObjectURL(blob);
+    worker=new Worker(url); worker.onmessage=onWorkerMsg;
+  }catch(e){ worker=null; setInterval(leerThingSpeakFallback,pollIntervalMs); leerThingSpeakFallback(); }
+}
+function stopWorker(){ if(worker){ worker.terminate(); worker=null; } }
+function setWorkerInterval(ms){ pollIntervalMs=Math.max(3000,Math.floor(ms)); if(worker){ worker.postMessage({type:&#x27;config&#x27;, iv:pollIntervalMs}); } }
+function kickWorker(){ if(worker){ worker.postMessage({type:&#x27;kick&#x27;}); } else { leerThingSpeakFallback(); } }
+function onWorkerMsg(ev){ const m=ev.data||{}; if(!m.ok){ setStatus(&#x27;Error al leer ThingSpeak.&#x27;, false); return; } handleThingSpeakData(m.data,true); }
+async function leerThingSpeakFallback(){ try{ const url=`https://api.thingspeak.com/channels/${CHANNEL_ID}/fields/${FIELD_NUM}/last.json?api_key=${READ_APIKEY}&amp;_=${Date.now()}`; const resp=await fetch(url,{cache:&#x27;no-store&#x27;}); handleThingSpeakData(await resp.json(),false); }catch(err){ setStatus(&#x27;Error al leer ThingSpeak.&#x27;, false); } }
+async function fetchRecentAndBackfill(){
+  try{
+    const url=new URL(`https://api.thingspeak.com/channels/${CHANNEL_ID}/fields/${FIELD_NUM}.json`);
+    url.searchParams.set(&#x27;results&#x27;, BACKFILL_RESULTS); url.searchParams.set(&#x27;api_key&#x27;, READ_APIKEY); url.searchParams.set(&#x27;_&#x27;, Date.now().toString());
+    const r=await fetch(url.toString(),{cache:&#x27;no-store&#x27;}); if(!r.ok) return; const j=await r.json();
+    const pts=(j.feeds||[]).map(f=&gt;{ const raw=f[`field${FIELD_NUM}`]; const v=raw==null?null:Number(raw); if(v==null||Number.isNaN(v)) return null; return {id:f.entry_id, t:f.created_at, v}; }).filter(Boolean);
+    if(!pts.length) return;
+    history=mergeReadings(history, pts); saveHistory(history); rebuildChartFrom(history);
+    const last=pts[pts.length-1]; lastSeenEntryId=last.id??lastSeenEntryId; lastSeenISO=last.t??lastSeenISO;
+  }catch(e){}
+}
+function handleThingSpeakData(data){
+  if(!data){ setStatus(&#x27;Sin datos de ThingSpeak.&#x27;, false); return; }
+  const entryId=data.entry_id??null, createdAt=data.created_at??null, raw=data[`field${FIELD_NUM}`], valor=parseFloat(raw);
+  if(isNaN(valor)){ setStatus(&#x27;Dato inválido o ausente en ThingSpeak.&#x27;, false); return; }
+  if((lastSeenEntryId!==null &amp;&amp; entryId!==null &amp;&amp; entryId===lastSeenEntryId) || (lastSeenISO!==null &amp;&amp; createdAt!==null &amp;&amp; createdAt===lastSeenISO)) return;
+  if(entryId!==null) lastSeenEntryId=entryId; if(createdAt!==null) lastSeenISO=createdAt;
+  const v=clamp(valor,0,cfg.max); value=v; animateNeedle(v); maybeAlert(v);
+  const point={ id: entryId ?? `${createdAt ?? Date.now()}`, t: createdAt ?? new Date().toISOString(), v };
+  history=mergeReadings(history,[point]); saveHistory(history); appendPointToChart(point);
+  lastReading.textContent=new Date(point.t).toLocaleString(&#x27;es-MX&#x27;,{hour12:true});
+}
+
+/* ==== Política de segundo plano ==== */
+function startBackfillLoop(){ if(backfillTimer) clearInterval(backfillTimer); backfillTimer=setInterval(fetchRecentAndBackfill, 60000); }
+function stopBackfillLoop(){ if(backfillTimer) { clearInterval(backfillTimer); backfillTimer=null; } }
+function applyBackgroundPolicy(){
+  if(document.visibilityState===&#x27;visible&#x27;){
+    if(!worker) startWorker();
+    startBackfillLoop();
+    fetchRecentAndBackfill();
+    kickWorker();
+  } else {
+    if(cfg.bgFollow){ setWorkerInterval(15000); if(!backfillTimer) startBackfillLoop(); }
+    else { stopWorker(); stopBackfillLoop(); }
+  }
+}
+
+/* ===== Wake Lock ===== */
+let wakeLock=null;
+function updateWakeBtn(active){ ui.btnWakeLock.textContent = (active? &#x27;🛡️ Pantalla activa: ON&#x27; : &#x27;🛡️ Mantener pantalla activa&#x27;); }
+async function requestWakeLock(){
+  if(!(&#x27;wakeLock&#x27; in navigator)){ toast(&#x27;🛡️ Pantalla activa&#x27;,&#x27;No soportado en este navegador.&#x27;,&#x27;warn&#x27;); return; }
+  try{
+    wakeLock = await navigator.wakeLock.request(&#x27;screen&#x27;);
+    cfg.wakeWanted = true; saveCfg(cfg); updateWakeBtn(true);
+    wakeLock.addEventListener(&#x27;release&#x27;, ()=&gt;{ updateWakeBtn(false); });
+    toast(&#x27;🛡️ Pantalla activa&#x27;,&#x27;Wake Lock habilitado.&#x27;,&#x27;ok&#x27;);
+  }catch(e){ toast(&#x27;🛡️ Pantalla activa&#x27;,&#x27;No se pudo activar (&#x27;+(e.message||&#x27;error&#x27;)+&#x27;).&#x27;,&#x27;err&#x27;); }
+}
+async function releaseWakeLock(){ try{ if(wakeLock){ await wakeLock.release(); } wakeLock=null; cfg.wakeWanted=false; saveCfg(cfg); updateWakeBtn(false); toast(&#x27;🛡️ Pantalla activa&#x27;,&#x27;Desactivado.&#x27;,&#x27;warn&#x27;); }catch(e){} }
+ui.btnWakeLock.addEventListener(&#x27;click&#x27;, ()=&gt;{ if(wakeLock){ releaseWakeLock(); } else { requestWakeLock(); } });
+document.addEventListener(&#x27;visibilitychange&#x27;, ()=&gt;{ if(document.visibilityState===&#x27;visible&#x27; &amp;&amp; cfg.wakeWanted &amp;&amp; !wakeLock){ requestWakeLock(); } applyBackgroundPolicy(); });
+
+/* ===== Relay (field2) ON/OFF — usando CANAL DE CONTROL SEPARADO ===== */
+function relayToast(on, who=&#x27;Tú&#x27;){
+  const title = on ? &#x27;PUMP encendida&#x27; : &#x27;PUMP apagada&#x27;;
+  const icon  = on ? &#x27;🟢&#x27; : &#x27;⚪&#x27;;
+  const kind  = on ? &#x27;ok&#x27; : &#x27;warn&#x27;;
+  const msg   = `Cambio ${who} • ${nowStr()}`;
+  toastUser(icon, title, msg, kind);
+  notifyNative(&#x27;PUMP&#x27;, title);
+}
+const RELAY_CHANNEL_ID   = 3073117;
+const RELAY_READ_APIKEY  = &quot;DL1I0ZDKIO9NO862&quot;;
+const RELAY_WRITE_APIKEY = &quot;Q0DTGZ8U7Q7ZFJG6&quot;;
+const RELAY_FIELD = 2;
+
+let relayState = null;
+let relayCooldownUntil = 0;
+const TS_MIN_INTERVAL_MS = 16000;
+const MAX_RETRIES = 3;
+let relayCountdownTimer = null;
+const relayBtn = ()=&gt;document.getElementById(&#x27;btnRelay&#x27;);
+const relayMsg = ()=&gt;document.getElementById(&#x27;relayMsg&#x27;);
+const relayLastEl = ()=&gt;document.getElementById(&#x27;relayLastTime&#x27;);
+
+function setRelayUI(state){
+  const btn = relayBtn(); if(!btn) return;
+  const on = state===1; btn.classList.toggle(&#x27;on&#x27;, on); btn.classList.toggle(&#x27;off&#x27;, !on);
+  btn.textContent = on ? &#x27;🔌 PUMP: ON&#x27; : &#x27;🔌 PUMP: OFF&#x27;;
+  btn.setAttribute(&#x27;aria-pressed&#x27;, on? &#x27;true&#x27;:&#x27;false&#x27;);
+}
+function setRelayStatus(text, ok=true){ const el=relayMsg(); if(!el) return; el.textContent=text; el.className = &#x27;msg &#x27; + (ok?&#x27;ok&#x27;:&#x27;err&#x27;); }
+function setRelayLast(tsISO){
+  try{
+    const el = relayLastEl(); if(!el) return;
+    const d = tsISO ? new Date(tsISO) : new Date();
+    el.textContent = &#x27;Último cambio: &#x27; + d.toLocaleString(&#x27;es-MX&#x27;, { hour12:true });
+  }catch(e){}
+}
+
+async function readRelayState(){
+  try{
+    const url = `https://api.thingspeak.com/channels/${RELAY_CHANNEL_ID}/fields/${RELAY_FIELD}/last.json?api_key=${RELAY_READ_APIKEY}&amp;_=${Date.now()}`;
+    const r = await fetch(url,{cache:&#x27;no-store&#x27;}); const j = await r.json();
+    const raw = j[`field${RELAY_FIELD}`]; const v = Number(raw);
+    if(!Number.isNaN(v)){
+      const newState = v&gt;0?1:0;
+      const changed = (relayState === null) || (newState !== relayState);
+      relayState = newState; setRelayUI(relayState);
+      if(changed){ setRelayLast(j.created_at || null); }
+    }
+  }catch(e){ /* silencio */ }
+}
+
+async function writeRelayState(v){
+  try{
+    const r = await fetch(&#x27;https://api.thingspeak.com/update.json&#x27;,{
+      method:&#x27;POST&#x27;,
+      headers:{&#x27;Content-Type&#x27;:&#x27;application/x-www-form-urlencoded;charset=UTF-8&#x27;},
+      body: new URLSearchParams({ api_key: RELAY_WRITE_APIKEY, [`field${RELAY_FIELD}`]: String(v) })
+    });
+    const j = await r.json().catch(()=&gt;null);
+    const entryId = (j &amp;&amp; typeof j === &#x27;object&#x27;) ? j.entry_id : NaN;
+    const ok = !Number.isNaN(entryId) &amp;&amp; entryId&gt;0;
+    if(ok){ setRelayStatus(v? &#x27;PUMP encendido&#x27;:&#x27;PUMP apagado&#x27;, true); setRelayLast(); }
+    else { setRelayStatus(&#x27;No se pudo escribir (posible límite de 15s o clave inválida).&#x27;, false); }
+    return ok;
+  }catch(e){ setRelayStatus(&#x27;Error de red al escribir en ThingSpeak.&#x27;, false); return false; }
+}
+
+async function getChannelLastInfo(){
+  try{
+    const url = `https://api.thingspeak.com/channels/${RELAY_CHANNEL_ID}/feeds/last.json?_=${Date.now()}`;
+    const r = await fetch(url,{cache:&#x27;no-store&#x27;}); const j = await r.json();
+    const ts = j &amp;&amp; j.created_at ? new Date(j.created_at).getTime() : null;
+    if(!ts) return null;
+    const diff = Date.now() - ts; const msUntilOpen = Math.max(0, TS_MIN_INTERVAL_MS - diff);
+    return { lastAt: ts, msUntilOpen };
+  }catch(e){ return null; }
+}
+
+function startRelayCountdown(ms){
+  const btn = relayBtn(); if(!btn) return;
+  btn.disabled = True;
+  const base = (relayState===1) ? &#x27;🔌 PUMP: ON&#x27; : &#x27;🔌 PUMP: OFF&#x27;;
+  const end = Date.now() + ms;
+  function tick(){
+    const left = Math.max(0, end - Date.now());
+    const s = Math.ceil(left/1000);
+    btn.textContent = `${base} (⏳ ${s}s)`;
+    if(left&lt;=0){ stopRelayCountdown(); }
+  }
+  stopRelayCountdown();
+  relayCountdownTimer = setInterval(tick, 250);
+  tick();
+}
+function stopRelayCountdown(){
+  const btn = relayBtn(); if(btn){ btn.disabled = false; setRelayUI(relayState===1?1:0); }
+  if(relayCountdownTimer){ clearInterval(relayCountdownTimer); relayCountdownTimer=null; }
+}
+
+async function ensureChannelOpenWithCountdown(){
+  const info = await getChannelLastInfo();
+  if(info &amp;&amp; info.msUntilOpen&gt;0){
+    startRelayCountdown(info.msUntilOpen);
+    await new Promise(res=&gt;setTimeout(res, info.msUntilOpen));
+    stopRelayCountdown();
+  }
+}
+
+async function doToggleWithRetries(next, tries){
+  await ensureChannelOpenWithCountdown();
+  setRelayStatus(&#x27;Enviando…&#x27;);
+  const ok = await writeRelayState(next);
+  if(ok) return true;
+  if(tries&lt;=1){ setRelayStatus(&#x27;No se pudo escribir después de reintentos.&#x27;, false); return false; }
+  startRelayCountdown(3000);
+  await new Promise(res=&gt;setTimeout(res,3000));
+  stopRelayCountdown();
+  return await doToggleWithRetries(next, tries-1);
+}
+
+async function toggleRelay(){
+  const now = Date.now();
+  if (now &lt; relayCooldownUntil) {
+    const waitMs = relayCooldownUntil - now;
+    setRelayStatus(&#x27;Espera un momento antes de otro cambio.&#x27;, false);
+    startRelayCountdown(waitMs);
+    setTimeout(() =&gt; {
+      if (Date.now() &gt;= relayCooldownUntil) {
+        stopRelayCountdown();
+        setRelayStatus(&#x27;&#x27;, true);
+      }
+    }, waitMs + 120);
+    return;
+  }
+  const next = (relayState===1)?0:1;
+  const ok = await doToggleWithRetries(next, MAX_RETRIES);
+  if (ok) {
+    relayState = next;
+    setRelayUI(relayState);
+    const cd = Math.max(TS_MIN_INTERVAL_MS, 5000);
+    relayCooldownUntil = now + cd;
+    setRelayStatus(&#x27;Cambio aplicado. Espera para el siguiente…&#x27;, true);
+    try{ relayToast(next, &#x27;manual&#x27;); }catch(e){}
+    startRelayCountdown(cd);
+    setTimeout(() =&gt; { stopRelayCountdown(); setRelayStatus(&#x27;&#x27;, true); }, cd + 120);
+  }
+}
+
+window.addEventListener(&#x27;load&#x27;, ()=&gt;{
+  const btn = document.getElementById(&#x27;btnRelay&#x27;); if(btn){ btn.addEventListener(&#x27;click&#x27;, toggleRelay); }
+  readRelayState();
+  setInterval(readRelayState, 30000);
+});
+
+/* ===== Arranque ===== */
+startWorker();
+setWorkerInterval(15000);
+fetchRecentAndBackfill();
+startBackfillLoop();
+if(cfg.wakeWanted){ requestWakeLock(); }
+applyBackgroundPolicy();
+
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;"
+  ></iframe>
+</section>
+
+</body>
+</html>
